@@ -156,36 +156,6 @@ async function probeForConcat(
   });
 }
 
-// #region debug-point A:report-helper
-function reportVideoFilterDebug(
-  hypothesisId: 'A' | 'B' | 'C' | 'D' | 'E',
-  location: string,
-  msg: string,
-  data: Record<string, unknown>
-): void {
-  let url = 'http://127.0.0.1:7777/event';
-  let sessionId = 'video-filter-failure';
-  try {
-    const env = fs.readFileSync(path.resolve(process.cwd(), '.dbg/video-filter-failure.env'), 'utf8');
-    url = env.match(/DEBUG_SERVER_URL=(.+)/)?.[1]?.trim() || url;
-    sessionId = env.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() || sessionId;
-  } catch {}
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId,
-      runId: process.env.DEBUG_RUN_ID || 'pre-fix',
-      hypothesisId,
-      location,
-      msg: `[DEBUG] ${msg}`,
-      data,
-      ts: Date.now(),
-    }),
-  }).catch(() => {});
-}
-// #endregion
-
 /**
  * Cut a segment from video
  */
@@ -254,26 +224,56 @@ export async function extractFrame(
   });
 }
 
+export interface ClipRenderOptions {
+  /** Seconds into the source file to start from */
+  trimStart?: number;
+  /** Source seconds to keep (before any speed change) */
+  trimDuration?: number;
+  /** Playback rate; <1 slows down (video setpts + audio atempo, kept in sync) */
+  speed?: number;
+}
+
 /**
- * Adjust video aspect ratio.
+ * Adjust video aspect ratio, optionally trimming and retiming the clip in the
+ * same encode pass.
  * Also normalizes fps/SAR/pixel format (xfade requires identical streams) and
  * re-encodes audio to a common format (acrossfade requires identical formats).
  */
 export async function adjustAspectRatio(
   inputPath: string,
   aspectRatio: '9:16' | '16:9',
-  outputPath: string
+  outputPath: string,
+  render?: ClipRenderOptions
 ): Promise<void> {
   const [width, height] = aspectRatio === '9:16' ? [1080, 1920] : [1920, 1080];
+  const speed =
+    render?.speed && render.speed > 0 && render.speed !== 1 ? render.speed : undefined;
+  // atempo on an audio-less input would make ffmpeg fail
+  const hasAudio = speed ? (await probeForConcat(inputPath)).hasAudio : false;
 
   return new Promise((resolve, reject) => {
-    ffmpeg(inputPath)
-      .videoFilters([
-        `scale=${width}:${height}:force_original_aspect_ratio=increase`,
-        `crop=${width}:${height}`,
-        'fps=30',
-        'setsar=1'
-      ])
+    const command = ffmpeg(inputPath);
+
+    if (render?.trimStart !== undefined && render.trimStart > 0.01) {
+      command.inputOptions(['-ss', render.trimStart.toFixed(3)]);
+    }
+    if (render?.trimDuration !== undefined && render.trimDuration > 0) {
+      command.inputOptions(['-t', render.trimDuration.toFixed(3)]);
+    }
+
+    command.videoFilters([
+      ...(speed ? [`setpts=PTS/${speed}`] : []),
+      `scale=${width}:${height}:force_original_aspect_ratio=increase`,
+      `crop=${width}:${height}`,
+      'fps=30',
+      'setsar=1'
+    ]);
+
+    if (speed && hasAudio) {
+      command.audioFilters([`atempo=${speed}`]);
+    }
+
+    command
       .outputOptions([
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
@@ -332,13 +332,16 @@ export interface ConcatAudioOptions {
  * `transitionDuration`), audio uses a matching acrossfade chain, so the two
  * stay in sync for any number of parts. Parts without an audio stream (intro/
  * outro cards, silent sources) get a synthesized silent track. Background
- * music is looped to the full output length, faded in/out, and mixed under
- * the program audio.
+ * music is loudness-normalized, looped to the full output length, faded
+ * in/out, ducked under the program audio via sidechain compression, and mixed.
+ *
+ * `transitionType` accepts a single xfade name or one per cut (cycled when
+ * shorter than the number of cuts).
  */
 export async function concatVideosWithTransitions(
   inputs: string[],
   output: string,
-  transitionType: string = 'fade',
+  transitionType: string | string[] = 'fade',
   transitionDuration: number = 0.5,
   audioOptions?: ConcatAudioOptions
 ): Promise<void> {
@@ -351,20 +354,6 @@ export async function concatVideosWithTransitions(
 
   // Probe all parts up front (durations drive the xfade offsets)
   const probes = await Promise.all(inputs.map(probeForConcat));
-  // #region debug-point A:concat-input-probes
-  reportVideoFilterDebug('A', 'ffmpegUtils.ts:concatVideosWithTransitions:probes', 'concat input probes', {
-    output,
-    transitionType,
-    transitionDuration,
-    keepOriginal,
-    backgroundMusic: bgMusic ? path.basename(bgMusic) : null,
-    inputs: inputs.map((input, index) => ({
-      index,
-      file: path.basename(input),
-      ...probes[index],
-    })),
-  });
-  // #endregion
 
   // Transitions need at least 2 parts, a positive duration, and every part
   // longer than the overlap itself
@@ -406,23 +395,6 @@ export async function concatVideosWithTransitions(
     nextInputIdx++;
   }
 
-  // #region debug-point D:input-index-map
-  reportVideoFilterDebug('D', 'ffmpegUtils.ts:concatVideosWithTransitions:input-map', 'computed ffmpeg input map', {
-    inputCount: inputs.length,
-    audioSrc,
-    nextInputIdx,
-    musicIdx,
-    keepOriginal,
-    hasBackgroundMusic: Boolean(bgMusic),
-    probes: probes.map((probe, index) => ({
-      index,
-      duration: probe.duration,
-      hasAudio: probe.hasAudio,
-      file: path.basename(inputs[index]),
-    })),
-  });
-  // #endregion
-
   const filters: string[] = [];
   const normalizedVideoLabels = inputs.map((_, i) => `[vv${i}]`);
 
@@ -440,8 +412,11 @@ export async function concatVideosWithTransitions(
       const out = i === inputs.length - 1 ? '[vout]' : `[v${i}]`;
       // Offset is on the accumulated timeline, not the previous part alone
       const offset = Math.max(0, timeline - transitionDuration);
+      const transition = Array.isArray(transitionType)
+        ? transitionType[(i - 1) % transitionType.length]
+        : transitionType;
       filters.push(
-        `${current}${normalizedVideoLabels[i]}xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset.toFixed(3)}${out}`
+        `${current}${normalizedVideoLabels[i]}xfade=transition=${transition}:duration=${transitionDuration}:offset=${offset.toFixed(3)}${out}`
       );
       timeline = timeline + probes[i].duration - transitionDuration;
       current = out;
@@ -488,12 +463,18 @@ export async function concatVideosWithTransitions(
   // ---- background music chain ----
   let musicLabel: string | null = null;
   if (bgMusic && musicIdx >= 0) {
-    const musicVolume = audioOptions?.musicVolume ?? 0.3;
+    const musicVolume = audioOptions?.musicVolume ?? 0.5;
     const fadeIn = audioOptions?.musicFadeIn ?? 1;
     const fadeOut = audioOptions?.musicFadeOut ?? 2;
 
     const chain = [
       'aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo',
+      // Music sources (Jamendo downloads, placeholder loops) are mastered at
+      // wildly different loudness; normalize to a fixed base so the template
+      // volume means the same thing for every track. Single-pass loudnorm
+      // outputs 192kHz, so resample back before mixing.
+      'loudnorm=I=-18:TP=-2:LRA=9',
+      'aresample=44100',
       `volume=${musicVolume}`,
       fadeIn > 0 ? `afade=t=in:st=0:d=${fadeIn}` : '',
       fadeOut > 0 && totalDuration > fadeOut
@@ -512,9 +493,19 @@ export async function concatVideosWithTransitions(
   // ---- final audio routing ----
   let audioOut: string | null = null;
   if (programLabel && musicLabel) {
-    // amix averages its inputs, bring the level back up afterwards
+    // Duck the music under the program audio: the original track drives a
+    // sidechain compressor, so the music dips whenever speech/effects are
+    // present and swells back in the quiet gaps. normalize=0 keeps true
+    // levels (amix would halve both inputs otherwise); the limiter catches
+    // summed peaks instead of a fixed make-up gain.
+    // threshold 0.02 (~-34dBFS RMS) so even quietly-recorded speech drives
+    // the duck, while room tone below it leaves the music untouched
+    filters.push(`${programLabel}asplit=2[prgmain][duckref]`);
     filters.push(
-      `${programLabel}${musicLabel}amix=inputs=2:duration=first:dropout_transition=0,volume=1.8[aout]`
+      `${musicLabel}[duckref]sidechaincompress=threshold=0.02:ratio=8:attack=120:release=700[bgmduck]`
+    );
+    filters.push(
+      `[prgmain][bgmduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,alimiter=limit=0.95:level=false[aout]`
     );
     audioOut = '[aout]';
   } else if (programLabel) {
@@ -537,9 +528,12 @@ export async function concatVideosWithTransitions(
     outputOptions.push('-an');
   }
 
+  const transitionDesc = Array.isArray(transitionType)
+    ? transitionType.join('>')
+    : transitionType;
   console.log(
-    `Concat: ${inputs.length} parts, transitions=${useTransitions ? transitionType : 'none'}, ` +
-      `audio=${audioOut ? (musicLabel ? 'program+music' : 'program') : 'none'}, ~${totalDuration.toFixed(1)}s`
+    `Concat: ${inputs.length} parts, transitions=${useTransitions ? transitionDesc : 'none'}, ` +
+      `audio=${audioOut ? (musicLabel ? 'program+ducked music' : 'program') : 'none'}, ~${totalDuration.toFixed(1)}s`
   );
 
   return new Promise((resolve, reject) => {
@@ -551,27 +545,9 @@ export async function concatVideosWithTransitions(
     pipeline
       .on('start', (cmd: string) => {
         console.log('FFmpeg command:', cmd);
-        // #region debug-point B:filter-graph
-        reportVideoFilterDebug('B', 'ffmpegUtils.ts:concatVideosWithTransitions:start', 'starting ffmpeg concat', {
-          useTransitions,
-          totalDuration,
-          filters,
-          outputOptions,
-          command: cmd,
-        });
-        // #endregion
       })
       .on('end', () => resolve())
-      .on('error', (error: Error, stdout?: string, stderr?: string) => {
-        // #region debug-point E:ffmpeg-error
-        reportVideoFilterDebug('E', 'ffmpegUtils.ts:concatVideosWithTransitions:error', 'ffmpeg concat failed', {
-          error: error.message,
-          stdoutTail: stdout ? stdout.split(/\r?\n/).slice(-20) : [],
-          stderrTail: stderr ? stderr.split(/\r?\n/).slice(-40) : [],
-        });
-        // #endregion
-        reject(error);
-      })
+      .on('error', reject)
       .run();
   });
 }

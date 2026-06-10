@@ -34,6 +34,30 @@ export interface Layout {
 export interface Transitions {
   type: TransitionType;
   duration: number;
+  /**
+   * Optional pool of raw ffmpeg xfade transition names cycled per cut
+   * (e.g. ["slideleft", "wipeleft", "smoothup"]). Overrides `type` when set.
+   */
+  variety?: string[];
+}
+
+export interface Pacing {
+  /**
+   * Target on-screen seconds per clip position; the last value repeats for
+   * the remaining clips. Longer clips are center-trimmed to the target so the
+   * cut keeps the action in the middle of the segment.
+   */
+  pattern?: number[];
+  /**
+   * Cold open: flash the best-scored moment before the story starts
+   * (skipped when the user hand-ordered segments).
+   */
+  hook?: {
+    enabled: boolean;
+    duration?: number;
+  };
+  /** Playback rate for story clips, e.g. 0.85 = slight slow motion. */
+  speed?: number;
 }
 
 export interface VisualStyle {
@@ -41,6 +65,7 @@ export interface VisualStyle {
   brightness?: number;
   contrast?: number;
   saturation?: number;
+  kenBurns?: boolean;
 }
 
 export interface TextOverlay {
@@ -77,6 +102,7 @@ export interface TemplateConfig {
   segmentSelection: SegmentSelection;
   layout: Layout;
   transitions: Transitions;
+  pacing?: Pacing;
   visualStyle: VisualStyle;
   textOverlay?: TextOverlay;
   backgroundMusic?: BackgroundMusic;

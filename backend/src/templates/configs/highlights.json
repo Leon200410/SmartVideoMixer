@@ -24,26 +24,35 @@
   },
   "transitions": {
     "type": "slide",
-    "duration": 0.22
+    "duration": 0.22,
+    "variety": ["slideleft", "wipeleft", "slideright", "smoothup", "hlslice"]
+  },
+  "pacing": {
+    "hook": {
+      "enabled": true,
+      "duration": 1.2
+    },
+    "pattern": [2.2, 3, 3, 4, 5]
   },
   "visualStyle": {
     "filter": "vibrant",
     "brightness": 0.06,
     "contrast": 0.12,
-    "saturation": 0.16
+    "saturation": 0.16,
+    "kenBurns": true
   },
   "backgroundMusic": {
     "enabled": true,
     "file": "upbeat.mp3",
     "jamendoTags": ["electronic", "dance", "upbeat"],
     "jamendoVocal": "instrumental",
-    "volume": 0.24,
+    "volume": 0.55,
     "fadeIn": 0.6,
     "fadeOut": 1.4
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.76,
+    "originalVolume": 0.9,
     "normalize": true
   }
 }

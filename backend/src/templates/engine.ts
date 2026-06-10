@@ -4,6 +4,18 @@ import fs from 'fs-extra';
 import ffmpeg from 'fluent-ffmpeg';
 import { Segment } from '../types';
 import { TemplateConfig, SegmentSelectionStrategy } from './types';
+
+export interface ClipPlan {
+  segment: Segment;
+  /** Cold-open flash of the best moment, prepended before the story */
+  isHook?: boolean;
+  /** Seconds into the segment file to start from */
+  trimStart?: number;
+  /** Source seconds to keep */
+  trimDuration?: number;
+  /** Playback rate (<1 = slow motion) */
+  speed?: number;
+}
 import { getDuration } from '../services/ffmpegUtils';
 import { fontFileOption } from '../services/fontResolver';
 import { renderMotionCard } from '../services/remotionRenderer';
@@ -100,10 +112,60 @@ export class TemplateEngine {
   }
 
   /**
+   * Turn the selected segments into a clip plan: apply the template's pacing
+   * (per-position duration targets, slow motion) and prepend a cold-open hook
+   * when configured. Without a `pacing` config every segment plays as-is.
+   */
+  planClips(selected: Segment[], customOrder?: string[]): ClipPlan[] {
+    const pacing = this.template.pacing;
+    const plans: ClipPlan[] = selected.map((segment) => ({ segment }));
+    if (!pacing) return plans;
+
+    const speed =
+      pacing.speed && pacing.speed > 0 && pacing.speed !== 1 ? pacing.speed : undefined;
+    const pattern = pacing.pattern;
+
+    plans.forEach((plan, i) => {
+      plan.speed = speed;
+      if (!pattern || pattern.length === 0) return;
+
+      const sourceDuration =
+        plan.segment.duration || plan.segment.end - plan.segment.start;
+      // Pattern values are on-screen seconds; slow motion stretches the
+      // source, so fewer source seconds are needed to fill the slot
+      const target = pattern[Math.min(i, pattern.length - 1)];
+      const sourceNeeded = speed ? target * speed : target;
+      if (sourceDuration > sourceNeeded) {
+        plan.trimStart = (sourceDuration - sourceNeeded) / 2;
+        plan.trimDuration = sourceNeeded;
+      }
+    });
+
+    // Cold-open hook: tease the best-scored moment before the story starts.
+    // A user-arranged order is a promise about what plays first, so skip it.
+    if (pacing.hook?.enabled && !(customOrder && customOrder.length > 0) && selected.length > 1) {
+      const best = [...selected].sort(
+        (a, b) => (b.geminiScore || 0) - (a.geminiScore || 0)
+      )[0];
+      const hookDuration = pacing.hook.duration || 1.2;
+      const sourceDuration = best.duration || best.end - best.start;
+      plans.unshift({
+        segment: best,
+        isHook: true,
+        trimStart: Math.max(0, (sourceDuration - hookDuration) / 2),
+        trimDuration: Math.min(hookDuration, sourceDuration),
+        // The hook plays at normal speed even when story clips are slowed
+      });
+    }
+
+    return plans;
+  }
+
+  /**
    * Apply visual style filter to video
    */
-  getFilterString(): string {
-    const { filter, brightness, contrast, saturation } = this.template.visualStyle;
+  getFilterString(aspectRatio?: '9:16' | '16:9'): string {
+    const { filter, brightness, contrast, saturation, kenBurns } = this.template.visualStyle;
     const filters: string[] = [];
 
     // Apply color adjustments
@@ -120,8 +182,6 @@ export class TemplateEngine {
     // Apply preset filter
     if (filter && filter !== 'none') {
       switch (filter) {
-        // colorbalance instead of colortemperature: the latter needs
-        // ffmpeg >= 4.4 and breaks on older binaries
         case 'warm':
           filters.push('colorbalance=rs=0.12:gs=0.02:bs=-0.12');
           break;
@@ -138,6 +198,13 @@ export class TemplateEngine {
           filters.push('curves=preset=darker:blue=0/0 0.5/0.58 1/1');
           break;
       }
+    }
+
+    // Apply Ken Burns panning effect (scale up slightly and pan slowly)
+    if (kenBurns) {
+      // Scale up by 1.1x and pan smoothly using sine waves
+      filters.push(`scale=iw*1.1:ih*1.1`);
+      filters.push(`crop=iw/1.1:ih/1.1:'(iw-ow)/2+(iw-ow)/2*sin(t*0.5)':'(ih-oh)/2+(ih-oh)/2*sin(t*0.3)'`);
     }
 
     return filters.join(',');
@@ -161,6 +228,25 @@ export class TemplateEngine {
       default:
         return 'fade';
     }
+  }
+
+  /**
+   * Build the transition for every cut of the final timeline. Cycles through
+   * the template's `variety` pool (raw xfade names) when present; a cold-open
+   * hook always exits through a white flash, the classic teaser cut.
+   */
+  getTransitionSequence(cutCount: number, hasHook: boolean): string | string[] {
+    const { variety } = this.template.transitions;
+    const base = this.getTransitionFilter(this.template.transitions.duration);
+    if ((!variety || variety.length === 0) && !hasHook) return base;
+
+    const pool = variety && variety.length > 0 ? variety : [base];
+    const sequence = Array.from(
+      { length: Math.max(cutCount, 0) },
+      (_, i) => pool[i % pool.length]
+    );
+    if (hasHook && sequence.length > 0) sequence[0] = 'fadewhite';
+    return sequence;
   }
 
   /**

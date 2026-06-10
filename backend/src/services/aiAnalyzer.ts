@@ -124,6 +124,7 @@ async function scoreFrame(imageBuffer: Buffer): Promise<AIScoreResult> {
 - 动作感或信息密度
 - 情绪吸引力
 - 独特性和传播潜力
+- 极度重要：如果画面模糊、人物闭眼、说话半张嘴、面部表情崩坏、主体不完整，请直接给极低分（0-3分）。
 
 只返回 JSON，不要 Markdown，不要额外解释，格式必须是：
 {"score": <0-10 的数字>, "reason": "<中文短理由，不超过 20 个字>"}`;

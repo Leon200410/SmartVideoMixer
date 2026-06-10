@@ -30,33 +30,43 @@ export async function generateFromTemplate(
 
   console.log(`Generating video with template: ${template.name}`);
 
-  // 1. Select segments based on template strategy
+  // 1. Select segments based on template strategy, then turn them into a
+  // clip plan (pacing trims, slow motion, cold-open hook)
   const selectedSegments = engine.selectSegments(segments, customOrder);
-  console.log(`Selected ${selectedSegments.length} segments`);
+  const clipPlans = engine.planClips(selectedSegments, customOrder);
+  const hasHook = clipPlans[0]?.isHook === true;
+  console.log(
+    `Selected ${selectedSegments.length} segments` + (hasHook ? ' + cold-open hook' : '')
+  );
 
   // 2. Create intro if configured
   const intro = await engine.createIntro(aspectRatio);
   if (intro) console.log('✓ Created intro');
 
-  // 3. Process each segment
+  // 3. Process each planned clip
   const processedSegments: string[] = [];
 
-  for (let i = 0; i < selectedSegments.length; i++) {
-    const seg = selectedSegments[i];
-    console.log(`Processing segment ${i + 1}/${selectedSegments.length}`);
+  for (let i = 0; i < clipPlans.length; i++) {
+    const plan = clipPlans[i];
+    const seg = plan.segment;
+    console.log(`Processing clip ${i + 1}/${clipPlans.length}${plan.isHook ? ' (hook)' : ''}`);
 
     // Pull the segment back from R2 if the local cache copy was cleaned up
     seg.path = await ensureLocal(seg.path || null, seg.r2Key ?? null, config.paths.segments);
 
-    // Adjust aspect ratio
+    // Adjust aspect ratio, applying the plan's trim/speed in the same pass
     const adjustedPath = path.join(
       config.paths.temp,
       `adjusted_${i}_${uuidv4()}.mp4`
     );
-    await adjustAspectRatio(seg.path, aspectRatio, adjustedPath);
+    await adjustAspectRatio(seg.path, aspectRatio, adjustedPath, {
+      trimStart: plan.trimStart,
+      trimDuration: plan.trimDuration,
+      speed: plan.speed,
+    });
 
     // Apply visual style filter
-    const filterString = engine.getFilterString();
+    const filterString = engine.getFilterString(aspectRatio);
     let styledPath = adjustedPath;
 
     if (filterString) {
@@ -67,8 +77,9 @@ export async function generateFromTemplate(
       await applyFilters(adjustedPath, styledPath, filterString);
     }
 
-    // Add text overlay if configured
-    if (template.textOverlay?.enabled) {
+    // Add text overlay if configured (not on the hook — a one-second teaser
+    // flash shouldn't carry a title)
+    if (template.textOverlay?.enabled && !plan.isHook) {
       const overlayPath = path.join(
         config.paths.temp,
         `overlay_${i}_${uuidv4()}.mp4`
@@ -104,10 +115,11 @@ export async function generateFromTemplate(
   const outro = await engine.createOutro(aspectRatio);
   if (outro) console.log('✓ Created outro');
 
-  // 5. Combine all parts
+  // 5. Combine all parts (the cold-open hook plays before the intro card)
   const allParts: string[] = [];
+  if (hasHook) allParts.push(processedSegments[0]);
   if (intro) allParts.push(intro);
-  allParts.push(...processedSegments);
+  allParts.push(...processedSegments.slice(hasHook ? 1 : 0));
   if (outro) allParts.push(outro);
 
   // 6. Concatenate with transitions
@@ -116,7 +128,7 @@ export async function generateFromTemplate(
     `${template.id}_${Date.now()}.mp4`
   );
 
-  const transitionType = engine.getTransitionFilter(template.transitions.duration);
+  const transitionType = engine.getTransitionSequence(allParts.length - 1, hasHook);
   const transitionDuration = template.transitions.duration;
 
   const backgroundMusic = await resolveBackgroundMusic(template);

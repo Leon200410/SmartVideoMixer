@@ -13,7 +13,8 @@
   "layout": {},
   "transitions": {
     "type": "fade",
-    "duration": 0.28
+    "duration": 0.28,
+    "variety": ["fade", "smoothright", "smoothleft"]
   },
   "visualStyle": {
     "filter": "warm",
@@ -26,13 +27,13 @@
     "file": "acoustic.mp3",
     "jamendoTags": ["acoustic", "folk", "happy"],
     "jamendoVocal": "instrumental",
-    "volume": 0.16,
+    "volume": 0.45,
     "fadeIn": 1,
     "fadeOut": 1.6
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.94,
+    "originalVolume": 1,
     "normalize": true
   }
 }

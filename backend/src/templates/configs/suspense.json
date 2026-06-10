@@ -23,7 +23,15 @@
   },
   "transitions": {
     "type": "fade",
-    "duration": 0.35
+    "duration": 0.35,
+    "variety": ["fadeblack", "fade"]
+  },
+  "pacing": {
+    "hook": {
+      "enabled": true,
+      "duration": 1.0
+    },
+    "pattern": [3.5, 6, 8]
   },
   "visualStyle": {
     "filter": "cinematic",
@@ -44,13 +52,13 @@
     "file": "dramatic.mp3",
     "jamendoTags": ["cinematic", "soundtrack", "dramatic"],
     "jamendoVocal": "instrumental",
-    "volume": 0.2,
+    "volume": 0.5,
     "fadeIn": 0.4,
     "fadeOut": 1.2
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.82,
+    "originalVolume": 0.9,
     "normalize": true
   }
 }

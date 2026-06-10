@@ -4,6 +4,13 @@ import { useGSAP } from '@gsap/react';
 import { GripVertical } from 'lucide-react';
 import { Segment } from '../types';
 
+// Seconds → m:ss for the segment time range
+const fmtTime = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+};
+
 interface SegmentListProps {
   segments: Segment[];
   onReorder?: (newOrder: string[]) => void;
@@ -105,6 +112,9 @@ export const SegmentList: React.FC<SegmentListProps> = ({ segments, onReorder })
                   ⭐
                 </div>
               )}
+              <div className="absolute bottom-2 left-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-slate-200 backdrop-blur">
+                {fmtTime(segment.start)} → {fmtTime(segment.end)}
+              </div>
               <div className="absolute bottom-2 right-2 rounded-md bg-black/60 px-1.5 py-0.5 text-[10px] font-bold text-cyan-300 backdrop-blur">
                 {segment.duration.toFixed(1)}s
               </div>

@@ -37,6 +37,20 @@ interface TemplateConfig {
   transitions: {
     type: 'fade' | 'wipe' | 'slide' | 'zoom' | 'none';
     duration: number;            // 转场时长（秒）
+    variety?: string[];          // 转场池：ffmpeg xfade 转场名数组，
+                                 // 每个剪切点轮换使用（设置后覆盖 type）
+                                 // 如 ["slideleft", "wipeleft", "smoothup"]
+  };
+
+  // 节奏编排（可选）：让成片有剪辑节奏而不是片段平铺
+  pacing?: {
+    pattern?: number[];          // 每个位置的目标成片时长（秒），最后一个值
+                                 // 对剩余片段重复；超长片段居中裁剪
+    hook?: {                     // 冷开场：最高分片段前置闪现，闪白进正片
+      enabled: boolean;          // （用户手动排序时自动跳过）
+      duration?: number;         // 闪现时长，默认 1.2 秒
+    };
+    speed?: number;              // 正片播放速率，如 0.85 = 轻微慢放
   };
   
   // 视觉风格
@@ -61,7 +75,10 @@ interface TemplateConfig {
   backgroundMusic?: {
     enabled: boolean;
     file?: string;               // 音乐文件名（在 assets/music/ 下）
-    volume: number;              // 音量 0-1
+    volume: number;              // 音量 0-1。音乐先做响度归一（-18 LUFS），
+                                 // 此值是归一后的相对音量；混音时原声会通过
+                                 // 侧链自动压低音乐（ducking），所以 0.45-0.65
+                                 // 是合理区间，不用担心盖过人声
     fadeIn: number;              // 淡入时长（秒）
     fadeOut: number;             // 淡出时长（秒）
   };
