@@ -9,6 +9,27 @@ interface VideoUploaderProps {
   onUploadError: (error: string) => void;
 }
 
+const SINGLE_MAX_SIZE = 200 * 1024 * 1024;
+const MULTI_MAX_SIZE = 30 * 1024 * 1024;
+const MULTI_MAX_DURATION = 30;
+
+const readVideoDuration = (file: File): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const video = document.createElement('video');
+    const url = URL.createObjectURL(file);
+
+    video.preload = 'metadata';
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(video.duration);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('无法读取视频时长'));
+    };
+    video.src = url;
+  });
+
 export const VideoUploader: React.FC<VideoUploaderProps> = ({
   onUploadSuccess,
   onUploadError,
@@ -17,6 +38,7 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [queuedFiles, setQueuedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Gentle float on the upload icon
@@ -50,38 +72,72 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      handleFile(files[0]);
+      handleFiles(files);
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleFile(files[0]);
+      handleFiles(Array.from(files));
     }
   };
 
-  const handleFile = async (file: File) => {
-    // Validate file type (video/avi: what most browsers report for .avi)
-    const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/avi'];
-    if (!validTypes.includes(file.type)) {
-      onUploadError('只支持 MP4, MOV, AVI 格式的视频文件');
+  const handleFiles = async (files: File[]) => {
+    const videoFiles = files.filter((file) => file.type.startsWith('video/'));
+    if (videoFiles.length === 0) {
+      onUploadError('请选择视频文件');
       return;
     }
 
-    // Validate file size (200MB)
-    const maxSize = 200 * 1024 * 1024;
-    if (file.size > maxSize) {
-      onUploadError('视频文件不能超过 200MB');
+    const isMultiUpload = videoFiles.length > 1;
+
+    if (videoFiles.length > 10) {
+      onUploadError('一次最多上传 10 个视频');
       return;
+    }
+
+    // Validate file type (video/avi: what most browsers report for .avi)
+    const validTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/avi'];
+    const invalidFile = videoFiles.find((file) => !validTypes.includes(file.type));
+    if (invalidFile) {
+      onUploadError(`"${invalidFile.name}" 格式不支持，只支持 MP4, MOV, AVI`);
+      return;
+    }
+
+    const maxSize = isMultiUpload ? MULTI_MAX_SIZE : SINGLE_MAX_SIZE;
+    const oversizedFile = videoFiles.find((file) => file.size > maxSize);
+    if (oversizedFile) {
+      onUploadError(
+        isMultiUpload
+          ? `多个视频上传时，每个视频不能超过 30MB："${oversizedFile.name}"`
+          : `"${oversizedFile.name}" 超过 200MB`
+      );
+      return;
+    }
+
+    if (isMultiUpload) {
+      try {
+        for (const file of videoFiles) {
+          const duration = await readVideoDuration(file);
+          if (duration > MULTI_MAX_DURATION) {
+            onUploadError(`多个视频上传时，每个视频不能超过 30 秒："${file.name}"`);
+            return;
+          }
+        }
+      } catch {
+        onUploadError('读取视频时长失败，请确认文件可正常播放');
+        return;
+      }
     }
 
     setUploading(true);
     setProgress(0);
+    setQueuedFiles(videoFiles);
 
     try {
       const formData = new FormData();
-      formData.append('video', file);
+      videoFiles.forEach((file) => formData.append('videos', file));
 
       const xhr = new XMLHttpRequest();
 
@@ -101,11 +157,13 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
           onUploadError(error.error || '上传失败');
         }
         setUploading(false);
+        setQueuedFiles([]);
       });
 
       xhr.addEventListener('error', () => {
         onUploadError('上传失败，请检查网络连接');
         setUploading(false);
+        setQueuedFiles([]);
       });
 
       xhr.open('POST', '/api/upload');
@@ -113,6 +171,7 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
     } catch (error) {
       onUploadError('上传过程中出现错误');
       setUploading(false);
+      setQueuedFiles([]);
     }
   };
 
@@ -140,6 +199,7 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
           ref={fileInputRef}
           type="file"
           accept="video/mp4,video/quicktime,video/x-msvideo,video/avi,.mp4,.mov,.avi"
+          multiple
           onChange={handleFileSelect}
           className="hidden"
         />
@@ -150,11 +210,11 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
               <Upload className="h-9 w-9 text-white" />
             </div>
             <h3 className="mb-2 text-2xl font-black text-white">
-              拖个视频进来，剩下交给 AI
+              拖一组视频进来，剩下交给 AI
             </h3>
-            <p className="mb-6 text-sm text-slate-400">或者点击这里选择文件</p>
+            <p className="mb-6 text-sm text-slate-400">或者点击这里多选素材文件</p>
             <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
-              {['MP4 / MOV / AVI', '≤ 200MB', '≤ 10 分钟'].map((tag) => (
+              {['单个：≤200MB / ≤10分钟', '多素材：每个≤30MB / ≤30秒', '最多 10 个'].map((tag) => (
                 <span
                   key={tag}
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-1 font-medium text-slate-300"
@@ -174,7 +234,7 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
               )}
             </div>
             <h3 className="mb-4 text-2xl font-black text-white">
-              {waitingForAI ? '解析视频信息中…' : '上传中…'}
+              {waitingForAI ? '解析素材信息中…' : `上传 ${queuedFiles.length} 个视频中…`}
             </h3>
             <div className="mx-auto mb-3 h-2.5 w-full max-w-md overflow-hidden rounded-full bg-white/10">
               <div
@@ -187,6 +247,21 @@ export const VideoUploader: React.FC<VideoUploaderProps> = ({
                 ? '生成预览缩略图 + 同步云端存储，马上就好'
                 : `${Math.round(progress)}% 完成`}
             </p>
+            {queuedFiles.length > 0 && (
+              <div className="mx-auto mt-5 max-h-32 max-w-md space-y-2 overflow-y-auto rounded-lg border border-white/10 bg-black/20 p-3 text-left">
+                {queuedFiles.map((file) => (
+                  <div
+                    key={`${file.name}-${file.size}`}
+                    className="flex items-center justify-between gap-3 text-xs text-slate-300"
+                  >
+                    <span className="truncate">{file.name}</span>
+                    <span className="flex-shrink-0 text-slate-500">
+                      {(file.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

@@ -9,6 +9,7 @@ import { smartSplit } from '../services/videoSplitter';
 import { scoreSegments } from '../services/aiAnalyzer';
 import { mirrorToR2, ensureLocal, resolveUrl } from '../services/storage';
 import { templateRegistry } from '../templates/registry';
+import { Segment } from '../types';
 import * as db from '../db';
 
 const router = Router();
@@ -26,6 +27,7 @@ const upload = multer({
   storage,
   limits: {
     fileSize: config.video.maxSizeBytes,
+    files: config.video.maxUploadCount,
   },
   fileFilter: (req, file, cb) => {
     if (config.video.allowedFormats.includes(file.mimetype)) {
@@ -39,6 +41,8 @@ const upload = multer({
 function segmentToApi(seg: db.SegmentRow) {
   return {
     id: seg.id,
+    sourceVideoId: seg.sourceVideoId ?? undefined,
+    sourceName: seg.sourceName ?? undefined,
     start: seg.startTime,
     end: seg.endTime,
     duration: seg.duration,
@@ -69,77 +73,145 @@ function videoToApi(video: db.VideoRow) {
   };
 }
 
+function projectToApi(projectId: string) {
+  const videos = db.getProjectVideos(projectId);
+  const root = videos[0] ?? db.getVideo(projectId);
+  if (!root) return null;
+
+  return {
+    ...videoToApi(root),
+    videos: videos.map(videoToApi),
+  };
+}
+
+function getUploadedFiles(req: Request): Express.Multer.File[] {
+  if (req.file) return [req.file];
+  if (Array.isArray(req.files)) return req.files;
+
+  const filesByField = req.files as
+    | Record<string, Express.Multer.File[]>
+    | undefined;
+  return [
+    ...(filesByField?.video || []),
+    ...(filesByField?.videos || []),
+  ];
+}
+
+async function removeFiles(files: Express.Multer.File[]): Promise<void> {
+  await Promise.all(files.map((file) => fs.remove(file.path).catch(() => {})));
+}
+
 /**
  * POST /api/upload
  * Store the video (local + R2) and return its metadata. Splitting now
  * happens later, once the user has picked a template (POST /video/:id/split).
  */
-router.post('/upload', upload.single('video'), async (req: Request, res: Response) => {
+router.post(
+  '/upload',
+  upload.fields([
+    { name: 'video', maxCount: 1 },
+    { name: 'videos', maxCount: config.video.maxUploadCount },
+  ]),
+  async (req: Request, res: Response) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No video file uploaded' });
+    const files = getUploadedFiles(req);
+    if (files.length === 0) {
+      return res.status(400).json({ error: 'No video files uploaded' });
     }
 
-    const tempVideoPath = req.file.path;
-    const videoId = uuidv4();
-
-    console.log(`Processing upload: ${videoId}`);
-
-    const metadata = await getVideoMetadata(tempVideoPath);
-
-    if (metadata.duration > config.video.maxDurationSeconds) {
-      await fs.remove(tempVideoPath);
+    if (files.length > config.video.maxUploadCount) {
+      await removeFiles(files);
       return res.status(400).json({
-        error: `Video too long. Max ${config.video.maxDurationSeconds / 60} minutes allowed.`,
+        error: `Too many videos. Max ${config.video.maxUploadCount} files allowed.`,
       });
     }
 
-    // Move into the uploads dir under a stable name
-    const ext = path.extname(req.file.originalname) || '.mp4';
-    const localPath = path.join(config.paths.uploads, `${videoId}${ext}`);
-    await fs.move(tempVideoPath, localPath);
-
-    // Poster thumbnail for the upload preview
-    let thumbLocalPath: string | null = null;
-    try {
-      thumbLocalPath = await generateThumbnail(localPath);
-    } catch (error) {
-      console.warn('Failed to generate poster thumbnail:', error);
+    const isMultiUpload = files.length > 1;
+    if (isMultiUpload) {
+      const oversized = files.find((file) => file.size > config.video.maxMultiVideoSizeBytes);
+      if (oversized) {
+        await removeFiles(files);
+        return res.status(400).json({
+          error:
+            `多个视频上传时，每个视频不能超过 ${config.video.maxMultiVideoSizeBytes / 1024 / 1024}MB。` +
+            `"${oversized.originalname}" 超出限制。`,
+        });
+      }
     }
 
-    // Mirror to R2 (graceful: returns null when disabled or failed)
-    const r2Key = await mirrorToR2(localPath, `uploads/${videoId}${ext}`, req.file.mimetype);
-    const thumbR2Key = thumbLocalPath
-      ? await mirrorToR2(
-          thumbLocalPath,
-          `thumbnails/${path.basename(thumbLocalPath)}`,
-          'image/jpeg'
-        )
-      : null;
+    const projectId = uuidv4();
+    console.log(`Processing upload project: ${projectId} (${files.length} videos)`);
 
-    db.insertVideo({
-      id: videoId,
-      originalName: req.file.originalname,
-      duration: metadata.duration,
-      width: metadata.width,
-      height: metadata.height,
-      localPath,
-      r2Key,
-      thumbLocalPath,
-      thumbR2Key,
-    });
+    const metadataList = [];
+    for (const file of files) {
+      const metadata = await getVideoMetadata(file.path);
+      const maxDuration = isMultiUpload
+        ? config.video.maxMultiVideoDurationSeconds
+        : config.video.maxDurationSeconds;
+      if (metadata.duration > maxDuration) {
+        await removeFiles(files);
+        return res.status(400).json({
+          error: isMultiUpload
+            ? `多个视频上传时，每个视频不能超过 ${maxDuration} 秒。"${file.originalname}" 超出限制。`
+            : `"${file.originalname}" is too long. Max ${maxDuration / 60} minutes allowed.`,
+        });
+      }
+      metadataList.push(metadata);
+    }
 
-    const video = db.getVideo(videoId)!;
-    console.log(`✓ Video stored: ${videoId} (R2: ${r2Key ? 'yes' : 'no'})`);
-    res.json(videoToApi(video));
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const metadata = metadataList[i];
+      const videoId = i === 0 ? projectId : uuidv4();
+      const ext = path.extname(file.originalname) || '.mp4';
+      const localPath = path.join(config.paths.uploads, `${videoId}${ext}`);
+
+      await fs.move(file.path, localPath);
+
+      let thumbLocalPath: string | null = null;
+      try {
+        thumbLocalPath = await generateThumbnail(localPath);
+      } catch (error) {
+        console.warn(`Failed to generate poster thumbnail for "${file.originalname}":`, error);
+      }
+
+      const r2Key = await mirrorToR2(localPath, `uploads/${videoId}${ext}`, file.mimetype);
+      const thumbR2Key = thumbLocalPath
+        ? await mirrorToR2(
+            thumbLocalPath,
+            `thumbnails/${path.basename(thumbLocalPath)}`,
+            'image/jpeg'
+          )
+        : null;
+
+      db.insertVideo({
+        id: videoId,
+        projectId,
+        originalName: file.originalname,
+        duration: metadata.duration,
+        width: metadata.width,
+        height: metadata.height,
+        localPath,
+        r2Key,
+        thumbLocalPath,
+        thumbR2Key,
+      });
+
+      console.log(`✓ Video stored: ${videoId} (R2: ${r2Key ? 'yes' : 'no'})`);
+    }
+
+    const project = projectToApi(projectId)!;
+    res.json(project);
   } catch (error) {
+    await removeFiles(getUploadedFiles(req));
     console.error('Upload error:', error);
     res.status(500).json({
       error: 'Failed to process video',
       details: error instanceof Error ? error.message : 'Unknown error',
     });
   }
-});
+  }
+);
 
 /**
  * POST /api/video/:videoId/split
@@ -162,13 +234,10 @@ router.post('/video/:videoId/split', async (req: Request, res: Response) => {
       });
     }
 
-    const video = db.getVideo(videoId);
-    if (!video) {
+    const projectVideos = db.getProjectVideos(videoId);
+    if (projectVideos.length === 0) {
       return res.status(404).json({ error: 'Video not found' });
     }
-
-    // Make sure the original video is on local disk (restore from R2 if needed)
-    const inputPath = await ensureLocal(video.localPath, video.r2Key, config.paths.uploads);
 
     // Template-driven split constraints (fall back to global defaults)
     const minDuration = Math.max(
@@ -179,11 +248,44 @@ router.post('/video/:videoId/split', async (req: Request, res: Response) => {
       minDuration + 1,
       template.segmentSelection.maxDuration ?? config.video.maxSegmentDuration
     );
+    const desiredSegments = template.segmentSelection.maxSegments ?? 8;
+    const maxCandidateSegments = Math.min(
+      config.video.maxSplitSegments,
+      Math.max(desiredSegments, desiredSegments * 4)
+    );
+    const maxCandidatesPerVideo = Math.max(
+      1,
+      Math.ceil(maxCandidateSegments / projectVideos.length)
+    );
 
     console.log(
-      `Splitting video ${videoId} for template "${templateId}" (${minDuration}-${maxDuration}s)`
+      `Splitting project ${videoId} (${projectVideos.length} videos) for template "${templateId}" ` +
+        `(${minDuration}-${maxDuration}s, up to ${maxCandidateSegments} candidates)`
     );
-    const segments = await smartSplit(inputPath, minDuration, maxDuration);
+
+    const segments: Segment[] = [];
+    for (const sourceVideo of projectVideos) {
+      try {
+        const inputPath = await ensureLocal(
+          sourceVideo.localPath,
+          sourceVideo.r2Key,
+          config.paths.uploads
+        );
+        const sourceSegments = await smartSplit(inputPath, minDuration, maxDuration, {
+          maxSegments: maxCandidatesPerVideo,
+        });
+        sourceSegments.forEach((seg) => {
+          seg.sourceVideoId = sourceVideo.id;
+          seg.sourceName = sourceVideo.originalName;
+        });
+        segments.push(...sourceSegments);
+      } catch (error) {
+        console.warn(
+          `Failed to split source video "${sourceVideo.originalName}":`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
 
     if (segments.length === 0) {
       return res.status(400).json({
@@ -195,7 +297,7 @@ router.post('/video/:videoId/split', async (req: Request, res: Response) => {
     console.log('Scoring segments with Ark...');
     const scores = await scoreSegments(
       segments.map((s) => s.path),
-      3
+      config.ai.scoringConcurrency
     );
     segments.forEach((seg, idx) => {
       seg.geminiScore = scores[idx].score;
@@ -226,6 +328,8 @@ router.post('/video/:videoId/split', async (req: Request, res: Response) => {
       segments.map((seg, idx) => ({
         id: seg.id,
         seq: idx,
+        sourceVideoId: seg.sourceVideoId,
+        sourceName: seg.sourceName,
         startTime: seg.start,
         endTime: seg.end,
         duration: seg.duration,
@@ -264,15 +368,15 @@ router.post('/video/:videoId/split', async (req: Request, res: Response) => {
  */
 router.get('/video/:videoId', (req: Request, res: Response) => {
   const { videoId } = req.params;
-  const video = db.getVideo(videoId);
+  const project = projectToApi(videoId);
 
-  if (!video) {
+  if (!project) {
     return res.status(404).json({ error: 'Video not found' });
   }
 
   const segments = db.getSegmentsByVideo(videoId);
   res.json({
-    ...videoToApi(video),
+    ...project,
     templateId: segments[0]?.templateId ?? null,
     segments: segments.map(segmentToApi),
   });

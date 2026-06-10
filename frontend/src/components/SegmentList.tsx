@@ -119,11 +119,18 @@ export const SegmentList: React.FC<SegmentListProps> = ({ segments, onReorder })
                 {segment.duration.toFixed(1)}s
               </div>
             </div>
-            {segment.geminiReason && (
+            {(segment.sourceName || segment.geminiReason) && (
               <div className="p-3">
-                <p className="line-clamp-2 text-xs leading-relaxed text-slate-400">
-                  {segment.geminiReason}
-                </p>
+                {segment.sourceName && (
+                  <p className="mb-1 truncate text-[11px] font-bold text-cyan-300">
+                    {segment.sourceName}
+                  </p>
+                )}
+                {segment.geminiReason && (
+                  <p className="line-clamp-2 text-xs leading-relaxed text-slate-400">
+                    {segment.geminiReason}
+                  </p>
+                )}
               </div>
             )}
           </div>

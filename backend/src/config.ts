@@ -10,6 +10,7 @@ export const config = {
     apiKey: process.env.ARK_API_KEY || process.env.VOLCENGINE_API_KEY || '',
     model: process.env.ARK_MODEL || 'doubao-seed-2-0-mini-260428',
     baseUrl: process.env.ARK_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3',
+    scoringConcurrency: parseInt(process.env.AI_SCORING_CONCURRENCY || '3', 10),
   },
 
   jamendo: {
@@ -36,11 +37,16 @@ export const config = {
   video: {
     maxSizeBytes: 200 * 1024 * 1024, // 200MB
     maxDurationSeconds: 600, // 10 minutes
+    maxMultiVideoSizeBytes: 30 * 1024 * 1024, // 30MB per video when uploading multiple
+    maxMultiVideoDurationSeconds: 30, // 30 seconds per video when uploading multiple
+    maxUploadCount: parseInt(process.env.MAX_UPLOAD_COUNT || '10', 10),
     // video/avi: mimetype most browsers actually report for .avi files
     allowedFormats: ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/avi'],
     minSegmentDuration: 5,
     maxSegmentDuration: 8,
     sceneDetectionThreshold: 0.3,
+    sceneDetectionFps: parseInt(process.env.SCENE_DETECTION_FPS || '4', 10),
+    maxSplitSegments: parseInt(process.env.MAX_SPLIT_SEGMENTS || '36', 10),
   },
 
   r2: {

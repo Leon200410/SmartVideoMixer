@@ -6,6 +6,8 @@ export interface Segment {
   duration: number;
   thumbnail: string;
   r2Key?: string | null;
+  sourceVideoId?: string | null;
+  sourceName?: string | null;
   geminiScore?: number;
   geminiReason?: string;
 }

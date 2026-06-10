@@ -7,7 +7,7 @@ import { Clapperboard, History, Check } from 'lucide-react';
 gsap.registerPlugin(useGSAP);
 
 const FLOW_STEPS = [
-  { label: '上传视频', match: /^\/$/ },
+  { label: '上传素材', match: /^\/$/ },
   { label: '选择模板', match: /^\/video\/[^/]+\/template$/ },
   { label: '剪辑配置', match: /^\/video\/[^/]+\/edit$/ },
   { label: '生成结果', match: /^\/result\/[^/]+$/ },

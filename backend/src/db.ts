@@ -11,6 +11,7 @@ import config from './config';
 
 export interface VideoRow {
   id: string;
+  projectId: string;
   originalName: string;
   duration: number;
   width: number;
@@ -25,6 +26,8 @@ export interface VideoRow {
 export interface SegmentRow {
   id: string;
   videoId: string;
+  sourceVideoId: string | null;
+  sourceName: string | null;
   seq: number;
   startTime: number;
   endTime: number;
@@ -75,6 +78,7 @@ function migrate(db: DatabaseSync): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS videos (
       id TEXT PRIMARY KEY,
+      project_id TEXT,
       original_name TEXT NOT NULL,
       duration REAL NOT NULL,
       width INTEGER NOT NULL,
@@ -89,6 +93,8 @@ function migrate(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS segments (
       id TEXT PRIMARY KEY,
       video_id TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+      source_video_id TEXT,
+      source_name TEXT,
       seq INTEGER NOT NULL,
       start_time REAL NOT NULL,
       end_time REAL NOT NULL,
@@ -122,12 +128,29 @@ function migrate(db: DatabaseSync): void {
     );
     CREATE INDEX IF NOT EXISTS idx_generations_created ON generations(created_at DESC);
   `);
+
+  const videoColumns = db.prepare('PRAGMA table_info(videos)').all() as Array<{ name: string }>;
+  if (!videoColumns.some((col) => col.name === 'project_id')) {
+    db.exec('ALTER TABLE videos ADD COLUMN project_id TEXT');
+    db.exec('UPDATE videos SET project_id = id WHERE project_id IS NULL');
+  }
+  db.exec('UPDATE videos SET project_id = id WHERE project_id IS NULL');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_videos_project ON videos(project_id, created_at)');
+
+  const segmentColumns = db.prepare('PRAGMA table_info(segments)').all() as Array<{ name: string }>;
+  if (!segmentColumns.some((col) => col.name === 'source_video_id')) {
+    db.exec('ALTER TABLE segments ADD COLUMN source_video_id TEXT');
+  }
+  if (!segmentColumns.some((col) => col.name === 'source_name')) {
+    db.exec('ALTER TABLE segments ADD COLUMN source_name TEXT');
+  }
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function toVideo(row: any): VideoRow {
   return {
     id: row.id,
+    projectId: row.project_id || row.id,
     originalName: row.original_name,
     duration: row.duration,
     width: row.width,
@@ -144,6 +167,8 @@ function toSegment(row: any): SegmentRow {
   return {
     id: row.id,
     videoId: row.video_id,
+    sourceVideoId: row.source_video_id,
+    sourceName: row.source_name,
     seq: row.seq,
     startTime: row.start_time,
     endTime: row.end_time,
@@ -182,6 +207,7 @@ function toGeneration(row: any): GenerationRow {
 
 export function insertVideo(v: {
   id: string;
+  projectId?: string | null;
   originalName: string;
   duration: number;
   width: number;
@@ -193,11 +219,12 @@ export function insertVideo(v: {
 }): void {
   getDb()
     .prepare(
-      `INSERT INTO videos (id, original_name, duration, width, height, local_path, r2_key, thumb_local_path, thumb_r2_key)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO videos (id, project_id, original_name, duration, width, height, local_path, r2_key, thumb_local_path, thumb_r2_key)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       v.id,
+      v.projectId ?? v.id,
       v.originalName,
       v.duration,
       v.width,
@@ -214,6 +241,18 @@ export function getVideo(id: string): VideoRow | null {
   return row ? toVideo(row) : null;
 }
 
+export function getProjectVideos(projectId: string): VideoRow[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM videos WHERE project_id = ? ORDER BY created_at ASC, rowid ASC')
+    .all(projectId)
+    .map(toVideo);
+
+  if (rows.length > 0) return rows;
+
+  const single = getVideo(projectId);
+  return single ? [single] : [];
+}
+
 // ---------- segments ----------
 
 export function replaceSegments(
@@ -222,6 +261,8 @@ export function replaceSegments(
   segments: Array<{
     id: string;
     seq: number;
+    sourceVideoId?: string | null;
+    sourceName?: string | null;
     startTime: number;
     endTime: number;
     duration: number;
@@ -238,13 +279,15 @@ export function replaceSegments(
   try {
     d.prepare('DELETE FROM segments WHERE video_id = ?').run(videoId);
     const stmt = d.prepare(
-      `INSERT INTO segments (id, video_id, seq, start_time, end_time, duration, local_path, r2_key, thumb_local_path, thumb_r2_key, score, reason, template_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO segments (id, video_id, source_video_id, source_name, seq, start_time, end_time, duration, local_path, r2_key, thumb_local_path, thumb_r2_key, score, reason, template_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const s of segments) {
       stmt.run(
         s.id,
         videoId,
+        s.sourceVideoId ?? null,
+        s.sourceName ?? null,
         s.seq,
         s.startTime,
         s.endTime,

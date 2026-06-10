@@ -1,33 +1,37 @@
 {
   "id": "vlog",
   "name": "Vlog日常",
-  "description": "自然风格，保留原音，轻音乐背景，适合日常记录和生活分享",
-  "tag": "轻松款",
+  "description": "清新暖调，保留生活原声，柔和转场和轻推拉，适合日常记录",
+  "tag": "日常款",
   "segmentSelection": {
     "strategy": "all",
     "maxSegments": 8,
-    "minDuration": 2,
-    "maxDuration": 10,
+    "minDuration": 2.5,
+    "maxDuration": 9,
     "sortBy": "time"
   },
   "layout": {},
   "transitions": {
     "type": "fade",
-    "duration": 0.28,
+    "duration": 0.45,
     "variety": ["fade", "smoothright", "smoothleft"]
+  },
+  "pacing": {
+    "pattern": [3.4, 4, 4.2, 4.8]
   },
   "visualStyle": {
     "filter": "warm",
-    "brightness": 0.04,
-    "contrast": 0.04,
-    "saturation": 0.08
+    "brightness": 0.06,
+    "contrast": 0.03,
+    "saturation": 0.1,
+    "kenBurns": true
   },
   "backgroundMusic": {
     "enabled": true,
     "file": "acoustic.mp3",
     "jamendoTags": ["acoustic", "folk", "happy"],
     "jamendoVocal": "instrumental",
-    "volume": 0.45,
+    "volume": 0.36,
     "fadeIn": 1,
     "fadeOut": 1.6
   },

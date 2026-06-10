@@ -1,5 +1,7 @@
 export interface Segment {
   id: string;
+  sourceVideoId?: string;
+  sourceName?: string;
   start: number;
   end: number;
   duration: number;
@@ -16,9 +18,11 @@ export interface VideoInfo {
   height: number;
   previewUrl: string;
   thumbnailUrl: string;
+  videos?: VideoInfo[];
 }
 
 export interface VideoDetail extends VideoInfo {
+  videos: VideoInfo[];
   templateId: string | null;
   segments: Segment[];
 }

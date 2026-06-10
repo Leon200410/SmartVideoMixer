@@ -1,20 +1,20 @@
 {
   "id": "highlights",
   "name": "高光混剪",
-  "description": "自动挑出评分最高的4-6个片段，快节奏拼接，展示精彩瞬间",
-  "tag": "经典款",
+  "description": "快节奏卡点混剪，高对比、高饱和、短促滑动转场，适合精彩瞬间",
+  "tag": "爆点款",
   "segmentSelection": {
     "strategy": "top-scored",
-    "maxSegments": 6,
-    "minDuration": 2,
-    "maxDuration": 8,
+    "maxSegments": 7,
+    "minDuration": 1.4,
+    "maxDuration": 5.5,
     "sortBy": "time"
   },
   "layout": {
     "intro": {
-      "duration": 0.8,
+      "duration": 0.6,
       "type": "text",
-      "text": "🔥 精彩集锦",
+      "text": "高光时刻",
       "style": {
         "backgroundColor": "#000000",
         "textColor": "#FFFFFF",
@@ -24,21 +24,21 @@
   },
   "transitions": {
     "type": "slide",
-    "duration": 0.22,
+    "duration": 0.26,
     "variety": ["slideleft", "wipeleft", "slideright", "smoothup", "hlslice"]
   },
   "pacing": {
     "hook": {
       "enabled": true,
-      "duration": 1.2
+      "duration": 0.9
     },
-    "pattern": [2.2, 3, 3, 4, 5]
+    "pattern": [1.6, 1.8, 2.1, 2.4, 3]
   },
   "visualStyle": {
     "filter": "vibrant",
-    "brightness": 0.06,
-    "contrast": 0.12,
-    "saturation": 0.16,
+    "brightness": 0.05,
+    "contrast": 0.18,
+    "saturation": 0.22,
     "kenBurns": true
   },
   "backgroundMusic": {
@@ -46,13 +46,13 @@
     "file": "upbeat.mp3",
     "jamendoTags": ["electronic", "dance", "upbeat"],
     "jamendoVocal": "instrumental",
-    "volume": 0.55,
+    "volume": 0.58,
     "fadeIn": 0.6,
     "fadeOut": 1.4
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.9,
+    "originalVolume": 0.85,
     "normalize": true
   }
 }

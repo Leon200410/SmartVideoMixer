@@ -36,7 +36,7 @@ export function UploadPage() {
       />
 
       <div className="mx-auto max-w-3xl text-center text-sm text-slate-500">
-        上传后：选择模板 → 按模板逻辑智能拆分 → 调整片段 → 生成短视频
+        上传素材组后：选择模板 → 按模板逻辑智能拆分 → 调整片段 → 生成短视频
       </div>
     </div>
   );

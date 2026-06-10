@@ -90,6 +90,8 @@ router.post('/generate', async (req: Request, res: Response) => {
     duration: row.duration,
     thumbnail: row.thumbLocalPath || '',
     r2Key: row.r2Key,
+    sourceVideoId: row.sourceVideoId,
+    sourceName: row.sourceName,
     geminiScore: row.score ?? undefined,
     geminiReason: row.reason ?? undefined,
   }));

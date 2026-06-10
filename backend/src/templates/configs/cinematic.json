@@ -1,20 +1,20 @@
 {
   "id": "cinematic",
   "name": "电影质感",
-  "description": "慢节奏剪辑，电影滤镜，淡入淡出转场，适合风景和情感类内容",
-  "tag": "高级感",
+  "description": "暗调电影风，慢节奏、柔和推拉、低饱和光影，适合情绪和风景内容",
+  "tag": "电影感",
   "segmentSelection": {
     "strategy": "top-scored",
-    "maxSegments": 4,
-    "minDuration": 4,
-    "maxDuration": 12,
+    "maxSegments": 5,
+    "minDuration": 3,
+    "maxDuration": 9,
     "sortBy": "time"
   },
   "layout": {
     "intro": {
       "duration": 1.1,
       "type": "text",
-      "text": "CINEMATIC",
+      "text": "FILM LOOK",
       "style": {
         "backgroundColor": "#000000",
         "textColor": "#FFFFFF",
@@ -24,18 +24,18 @@
   },
   "transitions": {
     "type": "fade",
-    "duration": 0.75,
+    "duration": 0.8,
     "variety": ["fade", "dissolve", "fadeblack"]
   },
   "pacing": {
-    "pattern": [5, 6.5, 8, 8],
-    "speed": 0.85
+    "pattern": [4, 5, 6, 6],
+    "speed": 0.92
   },
   "visualStyle": {
     "filter": "cinematic",
-    "brightness": -0.06,
-    "contrast": 0.2,
-    "saturation": -0.08,
+    "brightness": -0.05,
+    "contrast": 0.12,
+    "saturation": -0.16,
     "kenBurns": true
   },
   "backgroundMusic": {
@@ -43,13 +43,13 @@
     "file": "ambient.mp3",
     "jamendoTags": ["ambient", "soundtrack", "piano"],
     "jamendoVocal": "instrumental",
-    "volume": 0.65,
+    "volume": 0.5,
     "fadeIn": 1.4,
-    "fadeOut": 2.2
+    "fadeOut": 2.4
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.7,
+    "originalVolume": 0.72,
     "normalize": true
   }
 }

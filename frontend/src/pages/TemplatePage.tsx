@@ -5,6 +5,8 @@ import { TemplateSelector } from '../components/TemplateSelector';
 import { videoApi } from '../utils/api';
 import { useAppStore } from '../store/useAppStore';
 
+const fmtDuration = (seconds: number) => `${seconds.toFixed(1)}s`;
+
 export function TemplatePage() {
   const { videoId } = useParams<{ videoId: string }>();
   const navigate = useNavigate();
@@ -21,6 +23,8 @@ export function TemplatePage() {
 
   const [error, setError] = useState('');
   const [splitting, setSplitting] = useState(false);
+  const uploadedVideos = video ? video.videos?.length ? video.videos : [video] : [];
+  const totalDuration = uploadedVideos.reduce((sum, item) => sum + item.duration, 0);
 
   // Re-hydrate from the API on refresh / direct link
   useEffect(() => {
@@ -96,19 +100,38 @@ export function TemplatePage() {
       {/* Original video preview */}
       {video && (
         <div className="w-full">
-          <h2 className="mb-1 text-2xl font-black text-white">已上传视频</h2>
+          <h2 className="mb-1 text-2xl font-black text-white">
+            已上传素材 <span className="text-neon">×{uploadedVideos.length}</span>
+          </h2>
           <p className="mb-5 text-sm text-slate-400">
-            {video.originalName} · {video.duration.toFixed(1)}s ·{' '}
-            {video.width}×{video.height}
+            总时长 {fmtDuration(totalDuration)}，后续会从整组素材里拆分候选片段
           </p>
-          <div className="glass mx-auto max-w-xl overflow-hidden bg-black/60">
-            <video
-              controls
-              preload="metadata"
-              poster={video.thumbnailUrl}
-              src={video.previewUrl}
-              className="mx-auto max-h-[40vh] w-full"
-            />
+          <div
+            className={`grid gap-4 ${
+              uploadedVideos.length === 1 ? 'mx-auto max-w-xl grid-cols-1' : 'md:grid-cols-2'
+            }`}
+          >
+            {uploadedVideos.map((item, index) => (
+              <div key={item.videoId} className="glass overflow-hidden bg-black/50">
+                <video
+                  controls
+                  preload="metadata"
+                  poster={item.thumbnailUrl}
+                  src={item.previewUrl}
+                  className="mx-auto max-h-[32vh] w-full bg-black object-contain"
+                />
+                <div className="flex items-center justify-between gap-3 border-t border-white/10 p-3 text-xs">
+                  <div className="min-w-0">
+                    <div className="truncate font-bold text-white">
+                      {index + 1}. {item.originalName}
+                    </div>
+                    <div className="mt-1 text-slate-500">
+                      {fmtDuration(item.duration)} · {item.width}×{item.height}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

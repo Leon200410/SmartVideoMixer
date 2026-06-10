@@ -21,20 +21,20 @@ const ICON_MAP: Record<string, any> = {
 // Color mapping
 const COLOR_MAP: Record<string, { accent: string; ring: string }> = {
   highlights: {
-    accent: 'from-violet-500 to-fuchsia-500',
-    ring: 'ring-fuchsia-400/70',
+    accent: 'from-rose-500 to-amber-400',
+    ring: 'ring-rose-400/70',
   },
   suspense: {
-    accent: 'from-cyan-400 to-violet-500',
+    accent: 'from-cyan-400 to-emerald-500',
     ring: 'ring-cyan-400/70',
   },
   cinematic: {
-    accent: 'from-purple-500 to-pink-500',
-    ring: 'ring-purple-400/70',
+    accent: 'from-stone-700 to-amber-500',
+    ring: 'ring-amber-400/70',
   },
   vlog: {
-    accent: 'from-orange-400 to-rose-500',
-    ring: 'ring-orange-400/70',
+    accent: 'from-sky-400 to-lime-400',
+    ring: 'ring-sky-400/70',
   },
 };
 
@@ -147,24 +147,6 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({
                 <p className="flex-1 text-sm leading-relaxed text-slate-400">
                   {tpl.description}
                 </p>
-                {tpl.sampleUrl && (
-                  <div className="relative flex-shrink-0">
-                    <video
-                      src={tpl.sampleUrl}
-                      muted
-                      loop
-                      autoPlay
-                      playsInline
-                      preload="metadata"
-                      className={`h-32 w-[72px] rounded-lg bg-black object-cover transition-all duration-300 ${
-                        active ? 'ring-1 ring-white/40' : 'opacity-80'
-                      }`}
-                    />
-                    <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white/80 backdrop-blur">
-                      示例
-                    </span>
-                  </div>
-                )}
               </div>
             </button>
           );

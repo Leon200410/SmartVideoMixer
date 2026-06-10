@@ -47,13 +47,15 @@ function extractArkText(data: ArkResponse): string {
 }
 
 /**
- * Send a prompt + image to Volcengine Ark Responses API and return the text.
+ * Send a prompt + one or more images to Volcengine Ark Responses API and
+ * return the text.
  */
-async function callVision(prompt: string, imageBuffer: Buffer): Promise<string> {
+async function callVision(prompt: string, imageBuffer: Buffer | Buffer[]): Promise<string> {
   if (!config.ai.apiKey) {
     throw new Error('Ark API not configured');
   }
 
+  const imageBuffers = Array.isArray(imageBuffer) ? imageBuffer : [imageBuffer];
   const baseUrl = config.ai.baseUrl.replace(/\/$/, '');
   const resp = await fetch(`${baseUrl}/responses`, {
     method: 'POST',
@@ -68,10 +70,10 @@ async function callVision(prompt: string, imageBuffer: Buffer): Promise<string> 
         {
           role: 'user',
           content: [
-            {
+            ...imageBuffers.map((buffer) => ({
               type: 'input_image',
-              image_url: `data:image/jpeg;base64,${imageBuffer.toString('base64')}`,
-            },
+              image_url: `data:image/jpeg;base64,${buffer.toString('base64')}`,
+            })),
             {
               type: 'input_text',
               text: prompt,
@@ -101,17 +103,34 @@ function parseScore(text: string): AIScoreResult {
     throw new Error('Ark did not return valid JSON');
   }
 
-  const parsed = JSON.parse(jsonMatch[0]) as { score?: unknown; reason?: unknown };
+  const parsed = JSON.parse(jsonMatch[0]) as {
+    score?: unknown;
+    reason?: unknown;
+    subject?: unknown;
+    action?: unknown;
+    mood?: unknown;
+    risk?: unknown;
+  };
   const score = Number(parsed.score);
   if (!Number.isFinite(score)) {
     throw new Error('Ark score is not a number');
   }
 
+  const details = [parsed.subject, parsed.action, parsed.mood]
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+    .map((value) => value.trim());
+  const risk =
+    typeof parsed.risk === 'string' && parsed.risk.trim() && parsed.risk.trim() !== '无'
+      ? `风险:${parsed.risk.trim()}`
+      : '';
+  const reason =
+    typeof parsed.reason === 'string' && parsed.reason.trim()
+      ? parsed.reason.trim()
+      : [...details, risk].filter(Boolean).join('，');
+
   return {
     score: Math.max(0, Math.min(10, Math.round(score * 10) / 10)),
-    reason: typeof parsed.reason === 'string' && parsed.reason.trim()
-      ? parsed.reason.trim()
-      : 'AI scoring completed',
+    reason: reason || 'AI scoring completed',
   };
 }
 
@@ -138,6 +157,33 @@ async function scoreFrame(imageBuffer: Buffer): Promise<AIScoreResult> {
 }
 
 /**
+ * Score a short segment from ordered keyframes.
+ */
+async function scoreKeyframes(imageBuffers: Buffer[]): Promise<AIScoreResult> {
+  const prompt = `你是一名专业短视频剪辑师。下面的图片按时间顺序来自同一个视频片段（开头/中间/结尾）。
+请把它当作一个完整片段理解，而不是孤立截图。重点判断：
+- 主体是否明确，人物/物体/场景是否容易一眼看懂
+- 是否有动作推进、情绪变化或信息反转
+- 是否适合短视频开头、高光或承接段落
+- 构图、光线、清晰度、遮挡、闭眼、表情崩坏、运动模糊等质量风险
+
+评分规则：
+- 8-10：主体清楚，动作/情绪强，适合作为核心高光
+- 5-7：可用但亮点一般，适合承接
+- 0-4：主体不清、画质差、无信息量或观感尴尬
+
+只返回 JSON，不要 Markdown，不要额外解释，格式必须是：
+{"score": <0-10 的数字>, "subject": "<主体，最多10字>", "action": "<动作/事件，最多12字>", "mood": "<情绪/氛围，最多8字>", "risk": "<主要风险，没有写无>", "reason": "<中文短理由，不超过28字>"}`;
+
+  try {
+    return parseScore(await callVision(prompt, imageBuffers));
+  } catch (error) {
+    console.error('Error scoring keyframes:', error);
+    throw error;
+  }
+}
+
+/**
  * Score a frame with retry logic.
  */
 async function scoreFrameWithRetry(
@@ -157,31 +203,24 @@ async function scoreFrameWithRetry(
 }
 
 /**
- * Score a video segment: middle frame + one random frame, averaged.
+ * Score a video segment from ordered keyframes, so Ark can understand the
+ * mini-story inside the clip instead of judging isolated screenshots.
  */
 export async function scoreSegment(segmentPath: string): Promise<AIScoreResult> {
   console.log(`Scoring segment: ${segmentPath}`);
 
-  const positions = [0.5, Math.round((0.2 + Math.random() * 0.6) * 100) / 100];
+  const positions = [0.18, 0.5, 0.82];
   const framePaths: string[] = [];
 
   try {
-    const results: AIScoreResult[] = [];
+    const frameBuffers: Buffer[] = [];
     for (const position of positions) {
       const framePath = await extractFrame(segmentPath, position);
       framePaths.push(framePath);
-      const frameBuffer = await fs.readFile(framePath);
-      results.push(await scoreFrameWithRetry(frameBuffer));
+      frameBuffers.push(await fs.readFile(framePath));
     }
 
-    const avgScore =
-      results.reduce((sum, r) => sum + r.score, 0) / results.length;
-    const best = results.reduce((a, b) => (b.score > a.score ? b : a));
-    const result: AIScoreResult = {
-      score: Math.round(avgScore * 10) / 10,
-      reason: best.reason,
-    };
-
+    const result = await scoreKeyframes(frameBuffers);
     console.log(`Score: ${result.score} - ${result.reason}`);
     return result;
   } finally {

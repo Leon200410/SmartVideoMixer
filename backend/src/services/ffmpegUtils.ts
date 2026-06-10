@@ -171,8 +171,13 @@ export async function cutSegment(
       .setDuration(end - start)
       .outputOptions([
         '-c:v', 'libx264',
+        '-preset', 'veryfast',
+        '-crf', '23',
+        '-pix_fmt', 'yuv420p',
         '-c:a', 'aac',
-        '-strict', 'experimental'
+        '-ar', '44100',
+        '-ac', '2',
+        '-movflags', '+faststart'
       ])
       .output(output)
       .on('end', () => resolve())
