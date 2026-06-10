@@ -6,7 +6,7 @@ import fs from 'fs-extra';
 import config from '../config';
 import { getVideoMetadata, generateThumbnail } from '../services/ffmpegUtils';
 import { smartSplit } from '../services/videoSplitter';
-import { scoreSegments } from '../services/geminiAnalyzer';
+import { scoreSegments } from '../services/aiAnalyzer';
 import { mirrorToR2, ensureLocal, resolveUrl } from '../services/storage';
 import { templateRegistry } from '../templates/registry';
 import * as db from '../db';
@@ -144,7 +144,7 @@ router.post('/upload', upload.single('video'), async (req: Request, res: Respons
 /**
  * POST /api/video/:videoId/split
  * Split the video into segments using the chosen template's segment-duration
- * constraints, then score each segment with Gemini.
+ * constraints, then score each segment with Ark.
  */
 router.post('/video/:videoId/split', async (req: Request, res: Response) => {
   try {
@@ -191,8 +191,8 @@ router.post('/video/:videoId/split', async (req: Request, res: Response) => {
       });
     }
 
-    // Score segments with Gemini (with concurrency control)
-    console.log('Scoring segments with Gemini...');
+    // Score segments with Ark (with concurrency control)
+    console.log('Scoring segments with Ark...');
     const scores = await scoreSegments(
       segments.map((s) => s.path),
       3

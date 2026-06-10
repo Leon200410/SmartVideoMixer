@@ -8,7 +8,13 @@ interface ResultPreviewProps {
 
 export const ResultPreview: React.FC<ResultPreviewProps> = ({ result }) => {
   const handleDownload = () => {
-    if (result.videoUrl) window.open(result.videoUrl, '_blank');
+    if (!result.videoUrl) return;
+    const link = document.createElement('a');
+    link.href = result.videoUrl;
+    link.download = `${result.title || 'video'}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   return (

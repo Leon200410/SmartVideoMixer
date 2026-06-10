@@ -157,7 +157,7 @@ export function AppLayout() {
 
       {/* Footer */}
       <footer className="relative z-10 pb-8 text-center text-xs text-slate-600">
-        Powered by Gemini AI × FFmpeg × GSAP
+        Powered by Volcengine Ark × FFmpeg × GSAP
       </footer>
     </div>
   );

@@ -315,7 +315,7 @@ SmartVideoMixer/
 │   │   │       └── vlog.json
 │   │   ├── services/           # 核心服务
 │   │   │   ├── ffmpegUtils.ts
-│   │   │   ├── geminiAnalyzer.ts
+│   │   │   ├── aiAnalyzer.ts
 │   │   │   └── videoSplitter.ts
 │   │   └── routes/             # API 路由
 │   └── assets/
@@ -378,12 +378,13 @@ ls backend/assets/music/
 
 **症状：** 使用"悬念引流"模板时报错
 
-**原因：** 未配置 Gemini API Key
+**原因：** 未配置 Ark API Key
 
 **解决：**
 ```bash
 # 在 backend/.env 文件中添加
-GEMINI_API_KEY=your_api_key_here
+ARK_API_KEY=your_api_key_here
+ARK_MODEL=doubao-seed-2-0-mini-260428
 
 # 或者在模板配置中禁用 AI 标题
 "textOverlay": {

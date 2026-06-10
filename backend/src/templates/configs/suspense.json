@@ -11,44 +11,46 @@
   },
   "layout": {
     "outro": {
-      "duration": 2,
+      "duration": 1.4,
       "type": "text",
       "text": "关注我获取更多精彩",
       "style": {
         "backgroundColor": "#000000",
         "textColor": "#FFFFFF",
-        "fontSize": 70
+        "fontSize": 62
       }
     }
   },
   "transitions": {
     "type": "fade",
-    "duration": 0.5
+    "duration": 0.35
   },
   "visualStyle": {
     "filter": "cinematic",
-    "brightness": -0.05,
-    "contrast": 0.2,
-    "saturation": 0
+    "brightness": -0.03,
+    "contrast": 0.18,
+    "saturation": -0.05
   },
   "textOverlay": {
     "enabled": true,
-    "position": "center",
-    "fontSize": 60,
+    "position": "bottom",
+    "fontSize": 54,
     "fontColor": "#FFFFFF",
-    "backgroundColor": "black@0.5",
+    "backgroundColor": "black@0.42",
     "generateWithAI": true
   },
   "backgroundMusic": {
     "enabled": true,
     "file": "dramatic.mp3",
-    "volume": 0.25,
-    "fadeIn": 0.5,
-    "fadeOut": 1.5
+    "jamendoTags": ["cinematic", "soundtrack", "dramatic"],
+    "jamendoVocal": "instrumental",
+    "volume": 0.2,
+    "fadeIn": 0.4,
+    "fadeOut": 1.2
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.8,
+    "originalVolume": 0.82,
     "normalize": true
   }
 }

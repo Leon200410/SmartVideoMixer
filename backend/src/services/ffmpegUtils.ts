@@ -1,5 +1,4 @@
 import ffmpeg from 'fluent-ffmpeg';
-import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import { spawnSync } from 'child_process';
 import path from 'path';
 import fs from 'fs';
@@ -29,11 +28,20 @@ function resolveFfmpegPath(): string {
     // fall through to bundled binary
   }
 
-  console.warn(
-    '⚠️  Using bundled ffmpeg (old build). Transitions need ffmpeg >= 4.3 — ' +
-      'install a system ffmpeg or set FFMPEG_PATH if generation fails.'
-  );
-  return ffmpegInstaller.path;
+  try {
+    const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg') as { path: string };
+    console.warn(
+      '⚠️  Using bundled ffmpeg (old build). Transitions need ffmpeg >= 4.3 — ' +
+        'install a system ffmpeg or set FFMPEG_PATH if generation fails.'
+    );
+    return ffmpegInstaller.path;
+  } catch (error) {
+    throw new Error(
+      `Could not resolve ffmpeg. Install ffmpeg or set FFMPEG_PATH. ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
 }
 
 const ffmpegPath = resolveFfmpegPath();
@@ -109,20 +117,74 @@ export async function getVideoMetadata(filePath: string): Promise<{
  */
 async function probeForConcat(
   filePath: string
-): Promise<{ duration: number; hasAudio: boolean }> {
+): Promise<{
+  duration: number;
+  hasAudio: boolean;
+  width: number;
+  height: number;
+  pixFmt: string | null;
+  fps: string | null;
+  sampleRate: string | null;
+  channelLayout: string | null;
+  videoCodec: string | null;
+  audioCodec: string | null;
+}> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) {
         reject(err);
         return;
       }
+      const videoStream = metadata.streams.find((s) => s.codec_type === 'video');
+      const audioStream = metadata.streams.find((s) => s.codec_type === 'audio');
       resolve({
         duration: metadata.format.duration || 0,
         hasAudio: metadata.streams.some((s) => s.codec_type === 'audio'),
+        width: videoStream?.width || 0,
+        height: videoStream?.height || 0,
+        pixFmt: videoStream?.pix_fmt || null,
+        fps: videoStream?.r_frame_rate || null,
+        sampleRate:
+          audioStream?.sample_rate !== undefined && audioStream?.sample_rate !== null
+            ? String(audioStream.sample_rate)
+            : null,
+        channelLayout: audioStream?.channel_layout || null,
+        videoCodec: videoStream?.codec_name || null,
+        audioCodec: audioStream?.codec_name || null,
       });
     });
   });
 }
+
+// #region debug-point A:report-helper
+function reportVideoFilterDebug(
+  hypothesisId: 'A' | 'B' | 'C' | 'D' | 'E',
+  location: string,
+  msg: string,
+  data: Record<string, unknown>
+): void {
+  let url = 'http://127.0.0.1:7777/event';
+  let sessionId = 'video-filter-failure';
+  try {
+    const env = fs.readFileSync(path.resolve(process.cwd(), '.dbg/video-filter-failure.env'), 'utf8');
+    url = env.match(/DEBUG_SERVER_URL=(.+)/)?.[1]?.trim() || url;
+    sessionId = env.match(/DEBUG_SESSION_ID=(.+)/)?.[1]?.trim() || sessionId;
+  } catch {}
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      sessionId,
+      runId: process.env.DEBUG_RUN_ID || 'pre-fix',
+      hypothesisId,
+      location,
+      msg: `[DEBUG] ${msg}`,
+      data,
+      ts: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
 
 /**
  * Cut a segment from video
@@ -289,6 +351,20 @@ export async function concatVideosWithTransitions(
 
   // Probe all parts up front (durations drive the xfade offsets)
   const probes = await Promise.all(inputs.map(probeForConcat));
+  // #region debug-point A:concat-input-probes
+  reportVideoFilterDebug('A', 'ffmpegUtils.ts:concatVideosWithTransitions:probes', 'concat input probes', {
+    output,
+    transitionType,
+    transitionDuration,
+    keepOriginal,
+    backgroundMusic: bgMusic ? path.basename(bgMusic) : null,
+    inputs: inputs.map((input, index) => ({
+      index,
+      file: path.basename(input),
+      ...probes[index],
+    })),
+  });
+  // #endregion
 
   // Transitions need at least 2 parts, a positive duration, and every part
   // longer than the overlap itself
@@ -330,26 +406,48 @@ export async function concatVideosWithTransitions(
     nextInputIdx++;
   }
 
+  // #region debug-point D:input-index-map
+  reportVideoFilterDebug('D', 'ffmpegUtils.ts:concatVideosWithTransitions:input-map', 'computed ffmpeg input map', {
+    inputCount: inputs.length,
+    audioSrc,
+    nextInputIdx,
+    musicIdx,
+    keepOriginal,
+    hasBackgroundMusic: Boolean(bgMusic),
+    probes: probes.map((probe, index) => ({
+      index,
+      duration: probe.duration,
+      hasAudio: probe.hasAudio,
+      file: path.basename(inputs[index]),
+    })),
+  });
+  // #endregion
+
   const filters: string[] = [];
+  const normalizedVideoLabels = inputs.map((_, i) => `[vv${i}]`);
+
+  inputs.forEach((_, i) => {
+    filters.push(`[${i}:v]settb=AVTB${normalizedVideoLabels[i]}`);
+  });
 
   // ---- video chain ----
   if (inputs.length === 1) {
-    filters.push('[0:v]null[vout]');
+    filters.push(`${normalizedVideoLabels[0]}null[vout]`);
   } else if (useTransitions) {
-    let current = '[0:v]';
+    let current = normalizedVideoLabels[0];
     let timeline = probes[0].duration;
     for (let i = 1; i < inputs.length; i++) {
       const out = i === inputs.length - 1 ? '[vout]' : `[v${i}]`;
       // Offset is on the accumulated timeline, not the previous part alone
       const offset = Math.max(0, timeline - transitionDuration);
       filters.push(
-        `${current}[${i}:v]xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset.toFixed(3)}${out}`
+        `${current}${normalizedVideoLabels[i]}xfade=transition=${transitionType}:duration=${transitionDuration}:offset=${offset.toFixed(3)}${out}`
       );
       timeline = timeline + probes[i].duration - transitionDuration;
       current = out;
     }
   } else {
-    const labels = inputs.map((_, i) => `[${i}:v]`).join('');
+    const labels = normalizedVideoLabels.join('');
     filters.push(`${labels}concat=n=${inputs.length}:v=1:a=0[vout]`);
   }
 
@@ -445,13 +543,35 @@ export async function concatVideosWithTransitions(
   );
 
   return new Promise((resolve, reject) => {
-    command
+    const pipeline: any = command
       .complexFilter(filters)
       .outputOptions(outputOptions)
-      .output(output)
-      .on('start', (cmd) => console.log('FFmpeg command:', cmd))
+      .output(output);
+
+    pipeline
+      .on('start', (cmd: string) => {
+        console.log('FFmpeg command:', cmd);
+        // #region debug-point B:filter-graph
+        reportVideoFilterDebug('B', 'ffmpegUtils.ts:concatVideosWithTransitions:start', 'starting ffmpeg concat', {
+          useTransitions,
+          totalDuration,
+          filters,
+          outputOptions,
+          command: cmd,
+        });
+        // #endregion
+      })
       .on('end', () => resolve())
-      .on('error', reject)
+      .on('error', (error: Error, stdout?: string, stderr?: string) => {
+        // #region debug-point E:ffmpeg-error
+        reportVideoFilterDebug('E', 'ffmpegUtils.ts:concatVideosWithTransitions:error', 'ffmpeg concat failed', {
+          error: error.message,
+          stdoutTail: stdout ? stdout.split(/\r?\n/).slice(-20) : [],
+          stderrTail: stderr ? stderr.split(/\r?\n/).slice(-40) : [],
+        });
+        // #endregion
+        reject(error);
+      })
       .run();
   });
 }

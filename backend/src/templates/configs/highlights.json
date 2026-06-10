@@ -12,36 +12,38 @@
   },
   "layout": {
     "intro": {
-      "duration": 1.5,
+      "duration": 0.8,
       "type": "text",
       "text": "🔥 精彩集锦",
       "style": {
         "backgroundColor": "#000000",
         "textColor": "#FFFFFF",
-        "fontSize": 80
+        "fontSize": 72
       }
     }
   },
   "transitions": {
-    "type": "fade",
-    "duration": 0.3
+    "type": "slide",
+    "duration": 0.22
   },
   "visualStyle": {
     "filter": "vibrant",
-    "brightness": 0.1,
-    "contrast": 0.15,
-    "saturation": 0.2
+    "brightness": 0.06,
+    "contrast": 0.12,
+    "saturation": 0.16
   },
   "backgroundMusic": {
     "enabled": true,
     "file": "upbeat.mp3",
-    "volume": 0.3,
-    "fadeIn": 1,
-    "fadeOut": 2
+    "jamendoTags": ["electronic", "dance", "upbeat"],
+    "jamendoVocal": "instrumental",
+    "volume": 0.24,
+    "fadeIn": 0.6,
+    "fadeOut": 1.4
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.7,
+    "originalVolume": 0.76,
     "normalize": true
   }
 }

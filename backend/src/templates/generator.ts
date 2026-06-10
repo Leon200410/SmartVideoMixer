@@ -5,10 +5,11 @@ import { Segment } from '../types';
 import { TemplateConfig } from './types';
 import { TemplateEngine } from './engine';
 import { adjustAspectRatio, concatVideosWithTransitions } from '../services/ffmpegUtils';
-import { generateTitle } from '../services/geminiAnalyzer';
+import { generateTitle } from '../services/aiAnalyzer';
 import { extractFrame } from '../services/ffmpegUtils';
 import { ensureLocal } from '../services/storage';
 import { fontFileOption } from '../services/fontResolver';
+import { resolveBackgroundMusic } from '../services/musicLibrary';
 import config from '../config';
 
 export interface GenerateOptions {
@@ -118,14 +119,9 @@ export async function generateFromTemplate(
   const transitionType = engine.getTransitionFilter(template.transitions.duration);
   const transitionDuration = template.transitions.duration;
 
-  // Get background music path if enabled
-  let backgroundMusic: string | undefined;
-  if (template.backgroundMusic?.enabled && template.backgroundMusic.file) {
-    const musicPath = path.join(config.paths.music, template.backgroundMusic.file);
-    if (await fs.pathExists(musicPath)) {
-      backgroundMusic = musicPath;
-      console.log(`✓ Using background music: ${template.backgroundMusic.file}`);
-    }
+  const backgroundMusic = await resolveBackgroundMusic(template);
+  if (backgroundMusic) {
+    console.log(`✓ Using background music: ${path.basename(backgroundMusic)}`);
   }
 
   await concatVideosWithTransitions(
@@ -187,12 +183,13 @@ async function addTextOverlay(
   // Position mapping
   const yPosition =
     overlay.position === 'top'
-      ? 'h*0.2'
+      ? 'h*0.14'
       : overlay.position === 'bottom'
-      ? 'h*0.8'
+      ? 'h*0.72'
       : 'h/2';
 
-  const filterString = `drawtext=${fontFileOption()}text='${escapedText}':fontcolor=${fontColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${bgColor}:boxborderw=10`;
+  const boxBorder = Math.max(12, Math.round(fontSize * 0.25));
+  const filterString = `drawtext=${fontFileOption()}text='${escapedText}':fontcolor=${fontColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=${yPosition}:box=1:boxcolor=${bgColor}:boxborderw=${boxBorder}:shadowcolor=black@0.65:shadowx=3:shadowy=3`;
 
   return new Promise((resolve, reject) => {
     const ffmpeg = require('fluent-ffmpeg');

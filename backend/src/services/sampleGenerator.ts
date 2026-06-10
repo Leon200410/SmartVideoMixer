@@ -12,8 +12,9 @@ import { fontFileOption } from './fontResolver';
  * Each template gets a short demo video (two synthetic scenes joined with the
  * template's transition, graded with its visual filter, captioned with its
  * name, scored with its background music) so users can preview what a
- * template "feels like" before splitting. Generated once at startup into
- * assets/samples; drop your own <templateId>.mp4 there to override.
+ * template "feels like" before splitting. Samples are regenerated when the
+ * matching template config is newer; drop your own newer <templateId>.mp4
+ * there to override.
  */
 
 const SCENE_DURATION = 2.4;
@@ -29,6 +30,23 @@ export function sampleExists(templateId: string): boolean {
   } catch {
     return false;
   }
+}
+
+async function shouldGenerateSample(templateId: string): Promise<boolean> {
+  const outPath = samplePath(templateId);
+  if (!(await fs.pathExists(outPath))) return true;
+
+  const configPath = path.resolve(
+    __dirname,
+    `../templates/configs/${templateId}.json`
+  );
+  if (!(await fs.pathExists(configPath))) return false;
+
+  const [sampleStat, configStat] = await Promise.all([
+    fs.stat(outPath),
+    fs.stat(configPath),
+  ]);
+  return configStat.mtimeMs > sampleStat.mtimeMs;
 }
 
 function escapeDrawtext(text: string): string {
@@ -61,7 +79,7 @@ async function generateSample(template: TemplateConfig): Promise<void> {
     // Hue-shift the second synthetic scene so the cut is clearly visible
     `[1:v]hue=h=140,${style}setsar=1[s1]`,
     `[s0][s1]xfade=transition=${transition}:duration=${transitionDuration}:offset=${(SCENE_DURATION - transitionDuration).toFixed(2)}[xf]`,
-    `[xf]drawtext=${font}text='${caption}':fontcolor=white:fontsize=58:x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.45:boxborderw=16[vout]`,
+    `[xf]drawtext=${font}text='${caption}':fontcolor=white:fontsize=58:x=(w-text_w)/2:y=h*0.78:box=1:boxcolor=black@0.42:boxborderw=16:shadowcolor=black@0.65:shadowx=3:shadowy=3[vout]`,
   ];
 
   if (hasMusic) {
@@ -118,7 +136,7 @@ export async function ensureTemplateSamples(
   await fs.ensureDir(config.paths.samples);
 
   for (const template of templates) {
-    if (sampleExists(template.id)) continue;
+    if (!(await shouldGenerateSample(template.id))) continue;
 
     try {
       console.log(`Generating template sample: ${template.id}...`);

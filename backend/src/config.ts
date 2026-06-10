@@ -6,15 +6,16 @@ dotenv.config();
 export const config = {
   port: parseInt(process.env.PORT || '8000', 10),
 
-  gemini: {
-    apiKey: process.env.GEMINI_API_KEY || '',
-    model: process.env.GEMINI_MODEL || 'gemini-1.5-flash',
-    // Optional relay/proxy base URL (e.g. https://my-relay.example.com).
-    // Empty = Google's official endpoint.
-    baseUrl: process.env.GEMINI_BASE_URL || '',
-    // 'native' = Gemini protocol (/v1beta/...), 'openai' = OpenAI-compatible
-    // chat/completions (what most one-api/new-api relays expose)
-    protocol: process.env.GEMINI_PROTOCOL || 'native',
+  ai: {
+    apiKey: process.env.ARK_API_KEY || process.env.VOLCENGINE_API_KEY || '',
+    model: process.env.ARK_MODEL || 'doubao-seed-2-0-mini-260428',
+    baseUrl: process.env.ARK_BASE_URL || 'https://ark.cn-beijing.volces.com/api/v3',
+  },
+
+  jamendo: {
+    enabled: process.env.JAMENDO_ENABLED !== 'false',
+    clientId: process.env.JAMENDO_CLIENT_ID || '',
+    searchLimit: parseInt(process.env.JAMENDO_SEARCH_LIMIT || '12', 10),
   },
 
   paths: {

@@ -5,7 +5,7 @@
 ## ✨ 功能特性
 
 - 🎬 **模板驱动的智能切分**：先选模板，再按模板的节奏参数（片段时长范围）做场景检测切分
-- 🤖 **AI 评分**：使用 Google Gemini 视觉模型评估片段精彩度
+- 🤖 **AI 评分**：使用 Volcengine Ark 视觉模型评估片段精彩度
 - 🎨 **多模板支持**（高光混剪 / 悬念引流 / 电影质感 / Vlog 日常），每个模板自带**风格示例视频**
 - 🎵 **背景音乐**：模板配套 BGM 自动混音（占位音乐启动时自动合成，可替换为真实音乐文件）
 - 📱 **格式可选**：支持竖屏 9:16（抖音/快手）和横屏 16:9（B站/YouTube）
@@ -21,7 +21,7 @@
 - Node.js (≥ 23.4) + Express + TypeScript
 - SQLite（内置 `node:sqlite`，零原生依赖）
 - FFmpeg (视频处理)
-- Google Gemini AI (视觉分析)
+- Volcengine Ark AI (视觉分析)
 - Cloudflare R2 / S3 SDK (对象存储，可选)
 - Multer (文件上传)
 
@@ -44,7 +44,7 @@
 - Node.js 23.4+（数据库使用内置 `node:sqlite` 模块）
 - FFmpeg 4.3+（本地开发需要；优先使用系统 PATH 中的 ffmpeg，旧版缺少 xfade 转场滤镜）
 - Docker & Docker Compose (容器化部署)
-- Google Gemini API Key
+- Volcengine Ark API Key
 
 ### 1. 克隆项目
 
@@ -60,11 +60,12 @@ cd backend
 cp .env.example .env
 ```
 
-编辑 `.env` 文件，填入你的 Gemini API Key：
+编辑 `.env` 文件，填入你的 Ark API Key；Jamendo 可选：
 
 ```env
-GEMINI_API_KEY=your_actual_api_key_here
-GEMINI_MODEL=gemini-1.5-flash
+ARK_API_KEY=your_actual_api_key_here
+ARK_MODEL=doubao-seed-2-0-mini-260428
+JAMENDO_CLIENT_ID=your_jamendo_client_id_here
 PORT=8000
 ```
 
@@ -120,7 +121,7 @@ SmartVideoMixer/
 │   │   │   └── download.ts    # 下载/预览/缩略图（本地缺失自动 302 到 R2）
 │   │   ├── services/          # 业务逻辑
 │   │   │   ├── videoSplitter.ts      # 场景检测切分
-│   │   │   ├── geminiAnalyzer.ts     # AI 评分
+│   │   │   ├── aiAnalyzer.ts         # AI 评分
 │   │   │   ├── ffmpegUtils.ts        # FFmpeg 工具（xfade/acrossfade 拼接）
 │   │   │   ├── storage.ts            # 存储门面（本地缓存 + R2 持久层）
 │   │   │   ├── r2Storage.ts          # R2 客户端
@@ -186,7 +187,7 @@ SmartVideoMixer/
 ```
 
 ### POST /api/video/:videoId/split
-按所选模板的片段时长参数切分 + Gemini 评分（重复调用会替换上次拆分）
+按所选模板的片段时长参数切分 + Ark 评分（重复调用会替换上次拆分）
 
 **请求**：`{ "templateId": "highlights" }`
 
@@ -262,16 +263,14 @@ SmartVideoMixer/
 - 支持格式：MP4, MOV, AVI
 
 ### AI 模型
-默认使用 `gemini-1.5-flash`，可在 `.env` 中修改：
-- `gemini-1.5-flash`：快速、便宜（推荐）
-- `gemini-1.5-pro`：质量更高、更贵
-- `gemini-2.0-flash`：最新版本
+默认使用 `doubao-seed-2-0-mini-260428`，可在 `.env` 中修改：
+- `ARK_MODEL`：火山引擎 Ark 模型名
+- `ARK_BASE_URL`：Ark Responses API 基础地址，默认 `https://ark.cn-beijing.volces.com/api/v3`
 
-使用 API 中转站/代理时，在 `.env` 中额外配置基础地址（需兼容 Gemini 原生协议）：
+使用自定义 Ark 网关时，在 `.env` 中额外配置基础地址：
 ```env
-GEMINI_BASE_URL=https://your-relay.example.com
+ARK_BASE_URL=https://your-ark-compatible-endpoint.example.com/api/v3
 ```
-留空则直连 Google 官方接口。
 
 ### 场景检测
 在 `backend/src/config.ts` 中调整：
@@ -290,7 +289,7 @@ video: {
 
 1. **上传视频**：拖拽或选择视频文件，上传后可在页面中预览原片
 2. **选择模板**：每个模板卡片带风格示例视频；不同模板的拆分节奏不同
-3. **开始拆分**：按模板参数场景检测切分 + Gemini 逐段评分
+3. **开始拆分**：按模板参数场景检测切分 + Ark 逐段评分
 4. **调整片段 & 格式**：拖拽排序、选择竖屏 9:16 或 横屏 16:9
 5. **生成视频**：等待 AI 生成（自动混入模板背景音乐）
 6. **预览下载**：在线预览或下载；所有结果保存在「历史记录」中
@@ -310,10 +309,10 @@ apt-get install ffmpeg
 # 从 https://ffmpeg.org/download.html 下载
 ```
 
-### 2. Gemini API 错误
+### 2. Ark API 错误
 - 检查 API Key 是否正确
 - 确认 API 配额是否充足
-- 查看 [Gemini API 文档](https://ai.google.dev/)
+- 确认 `ARK_MODEL` 是否已开通
 
 ### 3. 中文字幕不显示
 Docker 镜像已内置 Noto CJK 字体，容器部署无需任何配置。
@@ -392,4 +391,4 @@ MIT
 
 ---
 
-**Powered by Google Gemini AI & FFmpeg** 🎬✨
+**Powered by Volcengine Ark & FFmpeg** 🎬✨

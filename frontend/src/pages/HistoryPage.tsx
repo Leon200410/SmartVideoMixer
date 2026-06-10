@@ -26,6 +26,16 @@ export function HistoryPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const downloadVideo = (item: Generation) => {
+    if (!item.videoUrl) return;
+    const link = document.createElement('a');
+    link.href = item.videoUrl;
+    link.download = `${item.title || 'video'}.mp4`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   if (loading) {
     return (
       <div className="step-panel flex items-center justify-center gap-2 py-24 text-slate-400">
@@ -127,7 +137,8 @@ export function HistoryPage() {
                     <button
                       onClick={(e) => {
                         e.preventDefault();
-                        window.open(item.videoUrl, '_blank');
+                        e.stopPropagation();
+                        downloadVideo(item);
                       }}
                       className="flex items-center gap-1 rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-bold text-slate-300 transition-colors hover:border-cyan-400/50 hover:text-cyan-300"
                     >

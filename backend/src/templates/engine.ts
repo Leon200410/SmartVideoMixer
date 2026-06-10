@@ -6,6 +6,7 @@ import { Segment } from '../types';
 import { TemplateConfig, SegmentSelectionStrategy } from './types';
 import { getDuration } from '../services/ffmpegUtils';
 import { fontFileOption } from '../services/fontResolver';
+import { renderMotionCard } from '../services/remotionRenderer';
 import config from '../config';
 
 /**
@@ -172,6 +173,22 @@ export class TemplateEngine {
     const outputPath = path.join(config.paths.temp, `intro_${uuidv4()}.mp4`);
     const [width, height] = aspectRatio === '9:16' ? [1080, 1920] : [1920, 1080];
 
+    try {
+      await renderMotionCard({
+        templateId: this.template.id,
+        kind: 'intro',
+        aspectRatio,
+        card: this.template.layout.intro,
+        outputPath,
+      });
+      return outputPath;
+    } catch (error) {
+      console.warn(
+        `Remotion intro failed for "${this.template.id}", falling back to FFmpeg card:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+
     const bgColor = style?.backgroundColor || '#000000';
     const textColor = style?.textColor || '#FFFFFF';
     const fontSize = style?.fontSize || 80;
@@ -185,7 +202,7 @@ export class TemplateEngine {
         .input(`color=c=${bgColor}:s=${width}x${height}:d=${duration}:r=30`)
         .inputOptions(['-f', 'lavfi'])
         .videoFilters([
-          `drawtext=${fontFileOption()}text='${escapedText}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h-text_h)/2`
+          `drawtext=${fontFileOption()}text='${escapedText}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.18:boxborderw=24:shadowcolor=black@0.75:shadowx=3:shadowy=3`
         ])
         .outputOptions(['-c:v', 'libx264', '-pix_fmt', 'yuv420p'])
         .output(outputPath)
@@ -205,6 +222,22 @@ export class TemplateEngine {
     const outputPath = path.join(config.paths.temp, `outro_${uuidv4()}.mp4`);
     const [width, height] = aspectRatio === '9:16' ? [1080, 1920] : [1920, 1080];
 
+    try {
+      await renderMotionCard({
+        templateId: this.template.id,
+        kind: 'outro',
+        aspectRatio,
+        card: this.template.layout.outro,
+        outputPath,
+      });
+      return outputPath;
+    } catch (error) {
+      console.warn(
+        `Remotion outro failed for "${this.template.id}", falling back to FFmpeg card:`,
+        error instanceof Error ? error.message : error
+      );
+    }
+
     const bgColor = style?.backgroundColor || '#000000';
     const textColor = style?.textColor || '#FFFFFF';
     const fontSize = style?.fontSize || 70;
@@ -216,7 +249,7 @@ export class TemplateEngine {
         .input(`color=c=${bgColor}:s=${width}x${height}:d=${duration}:r=30`)
         .inputOptions(['-f', 'lavfi'])
         .videoFilters([
-          `drawtext=${fontFileOption()}text='${escapedText}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h-text_h)/2`
+          `drawtext=${fontFileOption()}text='${escapedText}':fontcolor=${textColor}:fontsize=${fontSize}:x=(w-text_w)/2:y=(h-text_h)/2:box=1:boxcolor=black@0.18:boxborderw=24:shadowcolor=black@0.75:shadowx=3:shadowy=3`
         ])
         .outputOptions(['-c:v', 'libx264', '-pix_fmt', 'yuv420p'])
         .output(outputPath)

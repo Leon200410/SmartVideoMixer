@@ -13,24 +13,26 @@
   "layout": {},
   "transitions": {
     "type": "fade",
-    "duration": 0.4
+    "duration": 0.28
   },
   "visualStyle": {
     "filter": "warm",
-    "brightness": 0.05,
-    "contrast": 0.05,
-    "saturation": 0.1
+    "brightness": 0.04,
+    "contrast": 0.04,
+    "saturation": 0.08
   },
   "backgroundMusic": {
     "enabled": true,
     "file": "acoustic.mp3",
-    "volume": 0.2,
-    "fadeIn": 1.5,
-    "fadeOut": 2
+    "jamendoTags": ["acoustic", "folk", "happy"],
+    "jamendoVocal": "instrumental",
+    "volume": 0.16,
+    "fadeIn": 1,
+    "fadeOut": 1.6
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 1,
+    "originalVolume": 0.94,
     "normalize": true
   }
 }

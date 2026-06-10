@@ -12,36 +12,38 @@
   },
   "layout": {
     "intro": {
-      "duration": 2,
+      "duration": 1.1,
       "type": "text",
-      "text": "✨",
+      "text": "CINEMATIC",
       "style": {
         "backgroundColor": "#000000",
         "textColor": "#FFFFFF",
-        "fontSize": 100
+        "fontSize": 82
       }
     }
   },
   "transitions": {
     "type": "fade",
-    "duration": 1
+    "duration": 0.75
   },
   "visualStyle": {
     "filter": "cinematic",
-    "brightness": -0.1,
-    "contrast": 0.25,
-    "saturation": -0.15
+    "brightness": -0.06,
+    "contrast": 0.2,
+    "saturation": -0.08
   },
   "backgroundMusic": {
     "enabled": true,
     "file": "ambient.mp3",
-    "volume": 0.4,
-    "fadeIn": 2,
-    "fadeOut": 3
+    "jamendoTags": ["ambient", "soundtrack", "piano"],
+    "jamendoVocal": "instrumental",
+    "volume": 0.28,
+    "fadeIn": 1.4,
+    "fadeOut": 2.2
   },
   "audioProcessing": {
     "keepOriginal": true,
-    "originalVolume": 0.5,
+    "originalVolume": 0.62,
     "normalize": true
   }
 }

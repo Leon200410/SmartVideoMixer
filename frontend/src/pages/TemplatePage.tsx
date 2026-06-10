@@ -75,7 +75,7 @@ export function TemplatePage() {
           <span className="text-neon">按模板逻辑拆分中…</span>
         </h2>
         <p className="mt-2 text-sm text-slate-400">
-          场景检测 → 切片 → Gemini 逐段打分，通常需要 1-3 分钟
+          场景检测 → 切片 → Ark 逐段打分，通常需要 1-3 分钟
         </p>
       </div>
     );

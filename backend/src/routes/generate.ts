@@ -26,7 +26,7 @@ export function generationToApi(gen: db.GenerationRow & { videoName?: string }) 
     duration: gen.duration ?? undefined,
     createdAt: gen.createdAt,
     videoUrl: gen.localPath
-      ? resolveUrl(gen.r2Key, `/api/download/${path.basename(gen.localPath)}`)
+      ? `/api/download/${path.basename(gen.localPath)}`
       : undefined,
     streamUrl: gen.localPath
       ? resolveUrl(gen.r2Key, `/api/stream/${path.basename(gen.localPath)}`)

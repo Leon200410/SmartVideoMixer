@@ -92,7 +92,7 @@ app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    geminiConfigured: !!config.gemini.apiKey,
+    aiConfigured: !!config.ai.apiKey,
     r2Enabled: isR2Enabled(),
   });
 });
@@ -145,8 +145,8 @@ async function start() {
 
     setupCleanupCron();
 
-    if (!config.gemini.apiKey) {
-      console.warn('⚠️  Warning: GEMINI_API_KEY not set. AI features will not work.');
+    if (!config.ai.apiKey) {
+      console.warn('⚠️  Warning: ARK_API_KEY not set. AI features will not work.');
       console.warn('   Please set it in .env file');
     }
 
@@ -154,7 +154,7 @@ async function start() {
       console.log('');
       console.log('🎬 SmartVideoMixer Backend');
       console.log(`🚀 Server running at http://localhost:${config.port}`);
-      console.log(`📊 Model: ${config.gemini.model}`);
+      console.log(`📊 Model: ${config.ai.model}`);
       console.log(`☁️  R2 storage: ${isR2Enabled() ? 'enabled' : 'disabled (local only)'}`);
       console.log(`🎨 Templates loaded: ${templateRegistry.getAllIds().join(', ')}`);
       console.log('');

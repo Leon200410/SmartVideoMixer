@@ -17,7 +17,7 @@ export interface GenerateRequest {
   segmentOrder?: string[];
 }
 
-export interface GeminiScoreResult {
+export interface AIScoreResult {
   score: number;
   reason: string;
 }

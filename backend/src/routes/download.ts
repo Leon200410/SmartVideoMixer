@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs-extra';
 import config from '../config';
-import { isR2Enabled, getSignedR2Url } from '../services/r2Storage';
+import { isR2Enabled, getSignedR2Url, downloadFromR2 } from '../services/r2Storage';
 import { resolveUrl } from '../services/storage';
 import { findR2KeyByFilename } from '../db';
 
@@ -50,24 +50,22 @@ async function redirectToR2(filename: string, res: Response): Promise<boolean> {
 router.get('/download/:filename', async (req: Request, res: Response) => {
   try {
     const { filename } = req.params;
-    const filePath = await findLocalFile(filename, [
+    let filePath = await findLocalFile(filename, [
       config.paths.results,
       config.paths.uploads,
     ]);
 
     if (!filePath) {
-      if (await redirectToR2(filename, res)) return;
-      return res.status(404).json({ error: 'File not found' });
+      const r2Key = isR2Enabled() ? findR2KeyByFilename(path.basename(filename)) : null;
+      if (!r2Key) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      filePath = path.join(config.paths.results, path.basename(filename));
+      await downloadFromR2(r2Key, filePath);
     }
 
-    res.setHeader('Content-Type', 'video/mp4');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${path.basename(filePath)}"`
-    );
-
-    const stream = fs.createReadStream(filePath);
-    stream.pipe(res);
+    res.download(filePath, path.basename(filePath));
   } catch (error) {
     console.error('Download error:', error);
     res.status(500).json({ error: 'Failed to download file' });

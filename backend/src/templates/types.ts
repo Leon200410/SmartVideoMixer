@@ -55,6 +55,9 @@ export interface TextOverlay {
 export interface BackgroundMusic {
   enabled: boolean;
   file?: string;
+  jamendoTags?: string[];
+  jamendoSearch?: string;
+  jamendoVocal?: 'instrumental' | 'vocal' | 'both';
   volume: number;
   fadeIn: number;
   fadeOut: number;
