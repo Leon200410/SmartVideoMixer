@@ -5,6 +5,7 @@
 ## ✨ 功能特性
 
 - 🎬 **模板驱动的智能切分**：先选模板，再按模板的节奏参数（片段时长范围）做场景检测切分
+- 🎞️ **单视频 / 多素材上传**：单视频适合长素材，多素材适合正经混剪素材池
 - 🤖 **AI 评分**：使用 Volcengine Ark 视觉模型评估片段精彩度
 - 🎨 **多模板支持**（高光混剪 / 悬念引流 / 电影质感 / Vlog 日常），每个模板自带**风格示例视频**
 - 🎵 **背景音乐**：模板配套 BGM 自动混音（占位音乐启动时自动合成，可替换为真实音乐文件）
@@ -108,6 +109,45 @@ docker-compose down
 
 访问 `http://localhost:3000` 使用应用
 
+## 🎬 当前成品示例
+
+以下示例来自当前工作区 `backend/results/` 中已经生成的成品。启动后端后，也可以通过 `/api/stream/:filename` 在线预览，或通过 `/api/download/:filename` 下载。
+
+| 成品 | 模板 | 素材 | 画幅 | 时长 | 文件 |
+| --- | --- | --- | --- | ---: | --- |
+| 高光混剪案例 | `highlights` | `356398_tiny.mp4` | `16:9` | 16.4s | [highlights_1781102465842.mp4](./backend/results/highlights_1781102465842.mp4) |
+| 悬念引流案例 | `suspense` | `48873-457671829_tiny.mp4` | `16:9` | 10.9s | [suspense_1781097266089.mp4](./backend/results/suspense_1781097266089.mp4) |
+
+### 高光混剪案例
+
+<video src="./backend/results/highlights_1781102465842.mp4" controls preload="metadata" poster="./backend/results/highlights_1781102465842_thumb.jpg" width="720">
+  当前 Markdown 预览器不支持直接播放视频，请打开 backend/results/highlights_1781102465842.mp4 查看。
+</video>
+
+### 悬念引流案例
+
+<video src="./backend/results/suspense_1781097266089.mp4" controls preload="metadata" poster="./backend/results/suspense_1781097266089_thumb.jpg" width="720">
+  当前 Markdown 预览器不支持直接播放视频，请打开 backend/results/suspense_1781097266089.mp4 查看。
+</video>
+
+对应缩略图：
+
+| 成品 | 缩略图 |
+| --- | --- |
+| 高光混剪案例 | [highlights_1781102465842_thumb.jpg](./backend/results/highlights_1781102465842_thumb.jpg) |
+| 悬念引流案例 | [suspense_1781097266089_thumb.jpg](./backend/results/suspense_1781097266089_thumb.jpg) |
+
+模板风格示例会在后端启动时自动生成，也可以直接访问：
+
+| 模板 | 本地示例文件 | API 预览 |
+| --- | --- | --- |
+| 高光混剪 | [highlights.mp4](./backend/assets/samples/highlights.mp4) | `/api/templates/highlights/sample` |
+| 悬念引流 | [suspense.mp4](./backend/assets/samples/suspense.mp4) | `/api/templates/suspense/sample` |
+| 电影质感 | [cinematic.mp4](./backend/assets/samples/cinematic.mp4) | `/api/templates/cinematic/sample` |
+| Vlog 日常 | [vlog.mp4](./backend/assets/samples/vlog.mp4) | `/api/templates/vlog/sample` |
+
+> 这些成品文件是本地生成结果；如果启用了 R2 或清理策略，最终访问地址以「历史记录」里的 `streamUrl` / `videoUrl` 为准。
+
 ## 📁 项目结构
 
 ```
@@ -167,11 +207,18 @@ SmartVideoMixer/
 ## 🔑 API 端点
 
 ### POST /api/upload
-仅存储视频（本地 + R2）并返回元数据，**不再在上传时切分**
+仅存储素材（本地 + R2）并返回元数据，**不再在上传时切分**。
+
+支持两种模式：
+- 单视频：字段名 `video` 或 `videos` 均可，沿用长素材限制
+- 多素材：字段名 `videos`，每个素材按短素材限制校验
 
 **请求**：
 - `multipart/form-data`
-- `video`: 视频文件（MP4/MOV/AVI，≤200MB，≤10分钟）
+- `video`: 单个视频文件（MP4/MOV/AVI，≤200MB，≤10分钟）
+- `videos`: 一个或多个视频文件
+  - 只有 1 个文件时：≤200MB，≤10分钟
+  - 多个文件时：每个 ≤30MB，≤30秒，最多 10 个
 
 **响应**：
 ```json
@@ -182,7 +229,18 @@ SmartVideoMixer/
   "width": 1920,
   "height": 1080,
   "previewUrl": "https://r2.../uploads/uuid.mp4",
-  "thumbnailUrl": "https://r2.../thumbnails/uuid_thumb.jpg"
+  "thumbnailUrl": "https://r2.../thumbnails/uuid_thumb.jpg",
+  "videos": [
+    {
+      "videoId": "uuid",
+      "originalName": "my.mp4",
+      "duration": 120.5,
+      "width": 1920,
+      "height": 1080,
+      "previewUrl": "https://r2.../uploads/uuid.mp4",
+      "thumbnailUrl": "https://r2.../thumbnails/uuid_thumb.jpg"
+    }
+  ]
 }
 ```
 
@@ -199,6 +257,8 @@ SmartVideoMixer/
   "segments": [
     {
       "id": "seg_xxx",
+      "sourceVideoId": "uuid",
+      "sourceName": "my.mp4",
       "start": 0,
       "end": 5.2,
       "duration": 5.2,
@@ -258,8 +318,8 @@ SmartVideoMixer/
 ## ⚙️ 配置说明
 
 ### 视频限制
-- 最大文件大小：200MB
-- 最大时长：10分钟
+- 单视频上传：最大文件大小 200MB，最大时长 10分钟
+- 多素材上传：每个文件最大 30MB，最大时长 30秒，最多 10 个
 - 支持格式：MP4, MOV, AVI
 
 ### AI 模型
@@ -287,7 +347,7 @@ video: {
 
 ## 🎯 使用流程
 
-1. **上传视频**：拖拽或选择视频文件，上传后可在页面中预览原片
+1. **上传素材**：拖拽或选择单个长视频，或一次多选短素材，上传后可在页面中预览素材列表
 2. **选择模板**：每个模板卡片带风格示例视频；不同模板的拆分节奏不同
 3. **开始拆分**：按模板参数场景检测切分 + Ark 逐段评分
 4. **调整片段 & 格式**：拖拽排序、选择竖屏 9:16 或 横屏 16:9
