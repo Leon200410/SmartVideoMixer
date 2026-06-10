@@ -1,0 +1,47 @@
+{
+  "id": "cinematic",
+  "name": "电影质感",
+  "description": "慢节奏剪辑，电影滤镜，淡入淡出转场，适合风景和情感类内容",
+  "tag": "高级感",
+  "segmentSelection": {
+    "strategy": "top-scored",
+    "maxSegments": 4,
+    "minDuration": 4,
+    "maxDuration": 12,
+    "sortBy": "time"
+  },
+  "layout": {
+    "intro": {
+      "duration": 2,
+      "type": "text",
+      "text": "✨",
+      "style": {
+        "backgroundColor": "#000000",
+        "textColor": "#FFFFFF",
+        "fontSize": 100
+      }
+    }
+  },
+  "transitions": {
+    "type": "fade",
+    "duration": 1
+  },
+  "visualStyle": {
+    "filter": "cinematic",
+    "brightness": -0.1,
+    "contrast": 0.25,
+    "saturation": -0.15
+  },
+  "backgroundMusic": {
+    "enabled": true,
+    "file": "ambient.mp3",
+    "volume": 0.4,
+    "fadeIn": 2,
+    "fadeOut": 3
+  },
+  "audioProcessing": {
+    "keepOriginal": true,
+    "originalVolume": 0.5,
+    "normalize": true
+  }
+}

@@ -1,0 +1,38 @@
+services:
+  backend:
+    build: ./backend
+    container_name: smartvideomixer-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/segments:/app/segments
+      - ./backend/results:/app/results
+      - ./backend/temp:/app/temp
+      # SQLite database (videos / segments / generation history)
+      - ./backend/data:/app/data
+      # Generated placeholder music + template sample clips persist here
+      - ./backend/assets:/app/assets
+    # GEMINI_API_KEY / GEMINI_MODEL come from backend/.env
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8000
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  frontend:
+    build: ./frontend
+    container_name: smartvideomixer-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

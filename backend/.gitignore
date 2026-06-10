@@ -1,0 +1,14 @@
+node_modules/
+dist/
+uploads/
+segments/
+results/
+temp/
+*.log
+.env
+*.mp4
+*.mov
+*.avi
+*.jpg
+*.jpeg
+*.png

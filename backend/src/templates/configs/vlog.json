@@ -1,0 +1,36 @@
+{
+  "id": "vlog",
+  "name": "Vlog日常",
+  "description": "自然风格，保留原音，轻音乐背景，适合日常记录和生活分享",
+  "tag": "轻松款",
+  "segmentSelection": {
+    "strategy": "all",
+    "maxSegments": 8,
+    "minDuration": 2,
+    "maxDuration": 10,
+    "sortBy": "time"
+  },
+  "layout": {},
+  "transitions": {
+    "type": "fade",
+    "duration": 0.4
+  },
+  "visualStyle": {
+    "filter": "warm",
+    "brightness": 0.05,
+    "contrast": 0.05,
+    "saturation": 0.1
+  },
+  "backgroundMusic": {
+    "enabled": true,
+    "file": "acoustic.mp3",
+    "volume": 0.2,
+    "fadeIn": 1.5,
+    "fadeOut": 2
+  },
+  "audioProcessing": {
+    "keepOriginal": true,
+    "originalVolume": 1,
+    "normalize": true
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "highlights",
+  "name": "高光混剪",
+  "description": "自动挑出评分最高的4-6个片段，快节奏拼接，展示精彩瞬间",
+  "tag": "经典款",
+  "segmentSelection": {
+    "strategy": "top-scored",
+    "maxSegments": 6,
+    "minDuration": 2,
+    "maxDuration": 8,
+    "sortBy": "time"
+  },
+  "layout": {
+    "intro": {
+      "duration": 1.5,
+      "type": "text",
+      "text": "🔥 精彩集锦",
+      "style": {
+        "backgroundColor": "#000000",
+        "textColor": "#FFFFFF",
+        "fontSize": 80
+      }
+    }
+  },
+  "transitions": {
+    "type": "fade",
+    "duration": 0.3
+  },
+  "visualStyle": {
+    "filter": "vibrant",
+    "brightness": 0.1,
+    "contrast": 0.15,
+    "saturation": 0.2
+  },
+  "backgroundMusic": {
+    "enabled": true,
+    "file": "upbeat.mp3",
+    "volume": 0.3,
+    "fadeIn": 1,
+    "fadeOut": 2
+  },
+  "audioProcessing": {
+    "keepOriginal": true,
+    "originalVolume": 0.7,
+    "normalize": true
+  }
+}

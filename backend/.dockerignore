@@ -1,0 +1,9 @@
+node_modules
+dist
+uploads
+segments
+results
+temp
+.env
+.env.*
+*.log
